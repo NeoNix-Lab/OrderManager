@@ -1,0 +1,118 @@
+{
+    "folders": [
+        {
+            "name": "Order Manager - Root",
+            "path": "."
+        },
+        {
+            "name": "Quantower Orders Manager",
+            "path": "./Quantower-Orders-Manager"
+        },
+        {
+            "name": "Delta Based Indicators",
+            "path": "./DeltaBasedIndicators"
+        },
+        {
+            "name": "Rov Indicator",
+            "path": "./RovIndicator"
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/bin": true,
+            "**/obj": true,
+            "**/.vs": true,
+            "**/.git": false
+        },
+        "omnisharp.enableEditorConfigSupport": true,
+        "omnisharp.enableRoslynAnalyzers": true,
+        "dotnet.completion.showCompletionItemsFromUnimportedNamespaces": true,
+        "git.ignoreLimitWarning": true,
+        "explorer.confirmDelete": false,
+        "files.autoSave": "afterDelay",
+        "files.autoSaveDelay": 1000,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-dotnettools.csharp",
+            "ms-dotnettools.vscode-dotnet-runtime",
+            "editorconfig.editorconfig",
+            "ms-vscode.vscode-json",
+            "ms-vscode.powershell"
+        ]
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "Launch Quantower Orders Manager",
+                "type": "coreclr",
+                "request": "launch",
+                "program": "${workspaceFolder}/Quantower-Orders-Manager/bin/Debug/net6.0/DivergentStrV0-1.dll",
+                "args": [],
+                "cwd": "${workspaceFolder}/Quantower-Orders-Manager",
+                "console": "internalConsole",
+                "stopAtEntry": false
+            },
+            {
+                "name": "Launch Delta Based Indicators",
+                "type": "coreclr",
+                "request": "launch",
+                "program": "${workspaceFolder}/DeltaBasedIndicators/bin/Debug/net6.0/DeltaBasedIndicators.dll",
+                "args": [],
+                "cwd": "${workspaceFolder}/DeltaBasedIndicators",
+                "console": "internalConsole",
+                "stopAtEntry": false
+            },
+            {
+                "name": "Launch Rov Indicator",
+                "type": "coreclr",
+                "request": "launch",
+                "program": "${workspaceFolder}/RovIndicator/bin/Debug/net6.0/RovIndicator.dll",
+                "args": [],
+                "cwd": "${workspaceFolder}/RovIndicator",
+                "console": "internalConsole",
+                "stopAtEntry": false
+            }
+        ]
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "build-all",
+                "type": "shell",
+                "command": "dotnet",
+                "args": ["build"],
+                "group": {
+                    "kind": "build",
+                    "isDefault": true
+                },
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": false,
+                    "panel": "shared"
+                },
+                "problemMatcher": "$msCompile"
+            },
+            {
+                "label": "clean-all",
+                "type": "shell",
+                "command": "dotnet",
+                "args": ["clean"],
+                "group": "build",
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": false,
+                    "panel": "shared"
+                }
+            }
+        ]
+    }
+}
