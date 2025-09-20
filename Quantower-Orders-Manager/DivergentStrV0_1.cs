@@ -49,6 +49,8 @@ namespace DivergentStrV0_1
         private double _uiDeltaThresholdMult = 2.0;
         private double _uiDeltaStrengthLookback = 30.0;
         private double _uiDeltaStrengthMult = 2.0;
+        private double _uiDeltaDivergenceMult = 1.0;
+        private double _uiDeltaVDtVMult = 2.0;
         #endregion
 
         #region ====== Sessions ======
@@ -102,6 +104,18 @@ namespace DivergentStrV0_1
 
         [InputParameter("Period", 4)]
         public Period _period = Period.MIN1;
+
+        [InputParameter("Delta Threshold Multiplier", 5)]
+        public double _inputDeltaThresholdMultiplier = 2.0;
+
+        [InputParameter("Delta Strength Threshold Multiplier", 6)]
+        public double _inputDeltaStrengthThresholdMultiplier = 2.0;
+
+        [InputParameter("Delta Divergence Threshold Multiplier", 7)]
+        public double _inputDeltaDivergenceThresholdMultiplier = 1.0;
+
+        [InputParameter("VDtV Threshold Multiplier", 8)]
+        public double _inputVDtVThresholdMultiplier = 2.0;
         #endregion
 
         #region ====== Runtime State ======
@@ -143,6 +157,11 @@ namespace DivergentStrV0_1
 
         protected override void OnRun()
         {
+            _uiDeltaThresholdMult = _inputDeltaThresholdMultiplier;
+            _uiDeltaStrengthMult = _inputDeltaStrengthThresholdMultiplier;
+            _uiDeltaDivergenceMult = _inputDeltaDivergenceThresholdMultiplier;
+            _uiDeltaVDtVMult = _inputVDtVThresholdMultiplier;
+
             // Indicators
             this.AtrIndicator = Core.Instance.Indicators.CreateIndicator(
                 Core.Instance.Indicators.All.FirstOrDefault(x => x.Name == "RVOL (evolved)"));
@@ -171,7 +190,9 @@ namespace DivergentStrV0_1
                 new SettingItemDouble("Delta: Lookback", _uiDeltaLookback),
                 new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
                 new SettingItemDouble("Delta Strength: Lookback", _uiDeltaStrengthLookback),
-                new SettingItemDouble("Delta Strength: Threshold Multiplier", _uiDeltaStrengthMult)
+                new SettingItemDouble("Delta Strength: Threshold Multiplier", _uiDeltaStrengthMult),
+                new SettingItemDouble("VD Divergence: Threshold Multiplier", _uiDeltaDivergenceMult),
+                new SettingItemDouble("VDtV Threshold Multiplier", _uiDeltaVDtVMult)
             };
 
             // History request
@@ -640,6 +661,26 @@ namespace DivergentStrV0_1
                     Increment = 0.1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
+
+                settings.Add(new SettingItemDouble(nameof(_uiDeltaDivergenceMult), _uiDeltaDivergenceMult)
+                {
+                    Text = "VD Divergence: Threshold Multiplier",
+                    SortIndex = 5006,
+                    Minimum = 0.1,
+                    Maximum = 20.0,
+                    Increment = 0.1,
+                    Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
+                });
+
+                settings.Add(new SettingItemDouble(nameof(_uiDeltaVDtVMult), _uiDeltaVDtVMult)
+                {
+                    Text = "VDtV Threshold Multiplier",
+                    SortIndex = 5007,
+                    Minimum = 0.1,
+                    Maximum = 20.0,
+                    Increment = 0.1,
+                    Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
+                });
                 #endregion
 
                 return settings;
@@ -798,6 +839,9 @@ namespace DivergentStrV0_1
                         _uiAtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, atrSlip));
 
                     // ===== Delta =====
+                    if (value.TryGetValue(KEY_DELTA, out bool showDelta))
+                        _uiShowDelta = showDelta;
+
                     if (value.TryGetValue("Delta: Use Median", out bool dMed))
                         _uiDeltaUseMedian = dMed;
 
@@ -812,6 +856,12 @@ namespace DivergentStrV0_1
 
                     if (value.TryGetValue("Delta Strength: Threshold Multiplier", out double dSTh))
                         _uiDeltaStrengthMult = dSTh;
+
+                    if (value.TryGetValue("VD Divergence: Threshold Multiplier", out double dDivTh))
+                        _uiDeltaDivergenceMult = dDivTh;
+
+                    if (value.TryGetValue("VDtV Threshold Multiplier", out double vdtvTh))
+                        _uiDeltaVDtVMult = vdtvTh;
                 }
                 catch (Exception ex)
                 {

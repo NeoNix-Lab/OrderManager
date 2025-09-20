@@ -40,17 +40,24 @@ namespace DeltaBasedIndicators
 		[InputParameter("Delta Strength: Threshold Multiplier", 12)]
 		public double _Trh_Strenght = 2;
 
-		// VD/Volume settings
-		[InputParameter("VD/Volume Settings", 20)]
+		// VD Divergence settings
+		[InputParameter("VD Divergence Settings", 20)]
 		public readonly string _tag__tre = "#############";
 
-		[InputParameter("VDtV Lookback", 21)]
+		[InputParameter("VD Divergence: Threshold Multiplier", 21)]
+		public double _Trh_Divergence = 1.0;
+
+		// VD/Volume settings
+		[InputParameter("VD/Volume Settings", 30)]
+		public readonly string _tag__quattro = "#############";
+
+		[InputParameter("VDtV Lookback", 31)]
 		public int _LoockBackWindow_VDtV = 30;
 
-		[InputParameter("VDtV Threshold", 22)]
+		[InputParameter("VDtV Threshold Multiplier", 32)]
 		public double _Trh_VDtV = 2;
 
-        [InputParameter("Force Volume Ready", 23)]
+        [InputParameter("Force Volume Ready", 33)]
         public bool _forceVolume = false;
 
         private RingBuffer<double> _DeltaBuffer;
@@ -174,7 +181,9 @@ namespace DeltaBasedIndicators
 			// Divergenza: segno del VD vs direzione del prezzo
 			int priceSign = Math.Sign(this.HistoricalData[1][PriceType.Close] - this.HistoricalData[1][PriceType.Open]);
 			int vdSign = Math.Sign(delta);
-			int delta_resoult = (priceSign != 0 && vdSign != 0 && vdSign != priceSign) ? (vdSign > 0 ? 1 : -1) : 0;
+			double deltaAbs = Math.Abs(delta);
+			bool divergenceMagnitude = deltaMedian > 0 && deltaAbs > deltaMedian * this._Trh_Divergence;
+			int delta_resoult = (divergenceMagnitude && priceSign != 0 && vdSign != 0 && vdSign != priceSign) ? (vdSign > 0 ? 1 : -1) : 0;
 
 			
 
