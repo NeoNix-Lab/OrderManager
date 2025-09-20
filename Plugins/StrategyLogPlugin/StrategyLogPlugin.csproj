@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BaseOutputPath>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\bin\plug-ins\StrategyLogViewer</BaseOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Remove="HTML\layout.html" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="HTML\layout.html" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\DivergentStrV0-1.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="TradingPlatform.BusinessLayer">
+      <HintPath>Resources\TradingPlatform.BusinessLayer.dll</HintPath>
+      <CopyLocal>false</CopyLocal>
+    </Reference>
+    <Reference Include="TradingPlatform.PresentationLayer">
+      <HintPath>Resources\TradingPlatform.PresentationLayer.dll</HintPath>
+      <CopyLocal>false</CopyLocal>
+    </Reference>
+    <Reference Include="TradingPlatform.PresentationLayer.Plugins">
+      <HintPath>Resources\TradingPlatform.PresentationLayer.Plugins.dll</HintPath>
+      <CopyLocal>false</CopyLocal>
+    </Reference>
+  </ItemGroup>
+</Project>

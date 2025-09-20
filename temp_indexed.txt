@@ -1,0 +1,587 @@
+   1: using DivergentStrV0_1.OperationSystemAdv;
+   2: using DivergentStrV0_1.OperationSystemAdv.DDDCore;
+   3: using DivergentStrV0_1.Utils;
+   4: using System;
+   5: using System.Collections.Generic;
+   6: using System.Linq;
+   7: using System.Runtime.InteropServices;
+   8: using System.Text;
+   9: using System.Threading.Tasks;
+  10: using TradingPlatform.BusinessLayer;
+  11: using TradingPlatform.BusinessLayer.Licence;
+  12: 
+  13: namespace DivergentStrV0_1.Strategies
+  14: {
+  15:     internal enum TradeAction
+  16:     {
+  17:         Buy,
+  18:         Sell,
+  19:         Close,
+  20:         Revert,
+  21:         Wait
+  22:     }
+  23: 
+  24:     internal enum TradeSignal
+  25:     {
+  26:         OpenBuy,
+  27:         OpenSell,
+  28:         CloseLong,
+  29:         CloseSell,
+  30:         Wait,
+  31:         Unknown
+  32:     }
+  33: 
+  34:     internal class RowanStrategy : ConditionableBase<SlTpData>
+  35:     {
+  36: 
+  37:         #region === TRADABLE SESSIONS (UTC) ===
+  38:         // Sessione 1
+  39:         public bool EnableTradeSession1 { get; set; } = true;
+  40:         public string TradeSession1Name { get; set; } = "SESSION-1";
+  41:         public List<DayOfWeek> TradeSession1DaysMask { get; set; }
+  42:         public string TradeSession1OpenUtc { get; set; } = "08:00";
+  43:         public string TradeSession1CloseUtc { get; set; } = "12:00";
+  44: 
+  45:         // Sessione 2
+  46:         public bool EnableTradeSession2 { get; set; } = true;
+  47:         public string TradeSession2Name { get; set; } = "SESSION-2";
+  48:         public List<DayOfWeek> TradeSession2DaysMask { get; set; }
+  49:         public string TradeSession2OpenUtc { get; set; } = "13:00";
+  50:         public string TradeSession2CloseUtc { get; set; } = "17:00";
+  51: 
+  52:         // Sessione 3
+  53:         public bool EnableTradeSession3 { get; set; } = true;
+  54:         public string TradeSession3Name { get; set; } = "SESSION-3";
+  55:         public List<DayOfWeek> TradeSession3DaysMask { get; set; }
+  56:         public string TradeSession3OpenUtc { get; set; } = "18:00";
+  57:         public string TradeSession3CloseUtc { get; set; } = "21:00";
+  58:         #endregion
+  59: 
+  60:         private Indicator _atrIndicator;
+  61:         private Indicator _deltaBaseIndicator;
+  62:         private Indicator _slipageAtrIndicator;
+  63:         private int _maxOpen;
+  64:         private double _totalQuantity;
+  65:         private double _maxSessionLos;
+  66:         private double _startSessionLoss;        
+  67:         private int _minTradeSign;
+  68:         private int _minCloseSign;
+  69:         private bool _sessionClosed = false;
+  70:         private bool _strategyActive = true;
+  71:         private int _verbosityFreq = 0;
+  72:         private int _verbosityFreqCount = 0;
+  73:         private bool _loadAsync;
+  74: 
+  75:         public bool AllowToTrade
+  76:         {
+  77:             get
+  78:             {
+  79:                 var usdloss = this.Metrics.NetProfit - this._startSessionLoss;
+  80:                 var maxLoss = usdloss < 0 && Math.Abs(usdloss) >= Math.Abs(_maxSessionLos);
+  81:                 var sessionActive = StaticSessionManager.CurrentStatus == Status.Active;
+  82: 
+  83:                 if (maxLoss || !sessionActive)
+  84:                     return false;
+  85:                 else
+  86:                     return true;
+  87:             }
+  88:         }
+  89: 
+  90:         public RowanStrategy()
+  91:         {
+  92:             
+  93:         }
+  94: 
+  95:         public RowanStrategy(Indicator DeltaBaseIndicator, Indicator atrsIndicator, int max_open, double totalquantity,
+  96:             int minTradeSign, int minCloseSign, double maxSessionLosUsd, int verbosity_frequency, int slipageAtrPeriod) : base()
+  97:         {
+  98: 
+  99:             this._atrIndicator = atrsIndicator;
+ 100:             this._deltaBaseIndicator = DeltaBaseIndicator;
+ 101:             this._maxOpen = max_open;
+ 102:             this._totalQuantity = totalquantity;
+ 103:             this._maxSessionLos = maxSessionLosUsd;
+ 104:             this._minTradeSign = minTradeSign;
+ 105:             this._minCloseSign = minCloseSign;
+ 106:             this._verbosityFreq = verbosity_frequency;
+ 107:             this._slipageAtrIndicator = Core.Instance.Indicators.BuiltIn.ATR(slipageAtrPeriod, MaMode.SMA);
+ 108:         }
+ 109: 
+ 110: 
+ 111:         public override void Init(HistoryRequestParameters req, Account account, bool loadAsync = false, string description = "", bool allowHeavyMetrics = false)
+ 112:         {
+ 113:             this.ManagerChoice = ManagerType.PositionBased;
+ 114:             base.Init(req, account, loadAsync, description, allowHeavyMetrics);
+ 115:             StaticSessionManager.Initialize(this.HistoryProvider);
+ 116:             StaticSessionManager.TradeSessionsStatusChanged += StaticSessionManager_TradeSessionsStatusChanged;
+ 117:             this._loadAsync = loadAsync;
+ 118: 
+ 119:             if (!this._loadAsync)
+ 120:             {
+ 121:                 this.HistoryProvider.HistoricalData.AddIndicator(this._atrIndicator);
+ 122:                 this.HistoryProvider.HistoricalData.AddIndicator(this._deltaBaseIndicator);
+ 123:                 this.HistoryProvider.HistoricalData.AddIndicator(this._slipageAtrIndicator);
+ 124:             }
+ 125: 
+ 126:         }
+ 127: 
+ 128:        
+ 129:         public override void OnVolumeDataReady()
+ 130:         {
+ 131: 
+ 132:             //📝 TODO: [DEBUG] debug this
+ 133: 
+ 134:             base.OnVolumeDataReady();
+ 135: 
+ 136:             if (this._loadAsync)
+ 137:             {
+ 138:                 if (this._atrIndicator.Count == 0)
+ 139:                     this.HistoryProvider.HistoricalData.AddIndicator(this._atrIndicator);
+ 140:                 if (this._deltaBaseIndicator.Count == 0)
+ 141:                     this.HistoryProvider.HistoricalData.AddIndicator(this._deltaBaseIndicator);
+ 142:                 if (this._slipageAtrIndicator.Count == 0)
+ 143:                     this.HistoryProvider.HistoricalData.AddIndicator(this._slipageAtrIndicator);
+ 144:             }
+ 145: 
+ 146:         }
+ 147: 
+ 148:         private void StaticSessionManager_TradeSessionsStatusChanged(object sender, Status e)
+ 149:         {
+ 150:             if (e == Status.Active)
+ 151:             {
+ 152: 
+ 153:                 //📝 TODO: [Debug Required]
+ 154:                 this._startSessionLoss = this.Metrics.NetProfit;
+ 155:                 this._sessionClosed = false;
+ 156:             }
+ 157:         }
+ 158: 
+ 159:         protected override List<HistoryUpdAteType> GetUpdateTypes()
+ 160:         {
+ 161:             return new List<HistoryUpdAteType>
+ 162:             {
+ 163:                 HistoryUpdAteType.NewItem,
+ 164:             };
+ 165:         }
+ 166: 
+ 167:         public override void Dispose()
+ 168:         {
+ 169:             StaticSessionManager.TradeSessionsStatusChanged -= StaticSessionManager_TradeSessionsStatusChanged;
+ 170:             this._atrIndicator.Dispose();
+ 171:             this._deltaBaseIndicator.Dispose();
+ 172: 
+ 173:             base.Dispose();
+ 174:         }
+ 175: 
+ 176:         public override double SetQuantity() => this._totalQuantity / this._maxOpen;
+ 177: 
+ 178:         //📝 TODO: [Critical] passare un MarketData object con tutti i dati necessari per le decisioni di trade
+ 179: 
+ 180:         #region 🐞 BUG [Bug noto da risolvere #5] 
+ 181:         //BUG #5 vengono aperti short mentre la strategia e long 
+ 182:         #endregion
+ 183: 
+ 184:         public override void Update(object obj)
+ 185:         {
+ 186: 
+ 187:             //🧠 HINT: [FLOW] ritento l inserimento degli indicatori a causa del bug noto #1
+ 188:             if (this._atrIndicator.Count == 0)
+ 189:                 this.HistoryProvider.HistoricalData.AddIndicator(this._atrIndicator);
+ 190:             if (this._deltaBaseIndicator.Count == 0)
+ 191:                 this.HistoryProvider.HistoricalData.AddIndicator(this._deltaBaseIndicator);
+ 192:             if (this._slipageAtrIndicator.Count == 0)
+ 193:                 this.HistoryProvider.HistoricalData.AddIndicator(this._slipageAtrIndicator);
+ 194: 
+ 195:             //🧠 HINT: [INFO] Base entrypoint dal history provider creato in condizional base tramite il costruttore statico
+ 196:             HistoryEventArgs e = obj as HistoryEventArgs ?? null;
+ 197:             if (e == null)
+ 198:             {
+ 199:                 Core.Instance.Loggers.Log("Rowan Strategy error at Update casting", LoggingLevel.Error);
+ 200:                 Core.Instance.Loggers.Log("Strategy Will be Disabled", LoggingLevel.Error);
+ 201:                 this.ForceClosePositions(5);
+ 202: 
+ 203:                 #region 🐞 BUG [Bug noto da risolvere]
+ 204:                 //BUG #4
+ 205:                 #endregion
+ 206: 
+ 207:                 this._strategyActive = false;
+ 208:                 return;
+ 209:             }
+ 210: 
+ 211:             HistoryItem item = (HistoryItem)e.HistoryItem;
+ 212: 
+ 213:             StaticSessionManager.Update(item);
+ 214: 
+ 215:             if (this._loadAsync && !this.HistoryProvider.VolumeDataReady) 
+ 216:                 return;
+ 217: 
+ 218:             
+ 219:             try
+ 220:             {
+ 221:                 if (!this.AllowToTrade)
+ 222:                 {
+ 223: 
+ 224:                     //📝 TODO: [Debuggare] session closing
+ 225: 
+ 226:                     //🧠 HINT: [Richiesta  Soddisfatta] out on marketClose
+ 227:                     //🧠 HINT: [Richiesta  Soddisfatta] out on maxLoss
+ 228:                     if (StaticSessionManager.CurrentStatus == Status.Active && !_sessionClosed)
+ 229:                     {
+ 230:                         Core.Instance.Loggers.Log("Max session loss reached ", LoggingLevel.Trading);
+ 231:                         this.ForceClosePositions(5);
+ 232:                         _sessionClosed = true;
+ 233:                     }
+ 234:                     return;
+ 235:                 }
+ 236: 
+ 237: 
+ 238:                 //📝 TODO: [REQUIRED] aggiungere slippage atr
+ 239:                 //📝 TODO: [REQUIRED] verificare se e hd [0], [1] oppure [1], [2]
+ 240: 
+ 241:                 SlTpData marketData = new SlTpData()
+ 242:                 {
+ 243:                     currentPrice = item[PriceType.Open],
+ 244:                     Symbol = this.Symbol,
+ 245:                     AtrInTicks = Math.Abs(this.Symbol.CalculateTicks(this._slipageAtrIndicator.GetValue()+ item[PriceType.Open], item[PriceType.Open])),
+ 246:                 };
+ 247: 
+ 248:                 //🧠 HINT: [Flusso] ripeto con Market Data
+ 249:                 //SlTpData marketData = (SlTpData)obj;
+ 250:                
+ 251: 
+ 252:                 TradeSignal signal = this.CalculateTradeSignal2();
+ 253:                 TradeAction action = TradeAction.Wait;
+ 254: 
+ 255:                 switch (this.Metrics.ExposedSide)
+ 256:                 {
+ 257:                     case ExpositionSide.Long:
+ 258:                         if (signal == TradeSignal.CloseLong)
+ 259:                             action = TradeAction.Close;
+ 260:                         else if (signal == TradeSignal.OpenSell)
+ 261:                             action = TradeAction.Revert;
+ 262:                         else if (signal == TradeSignal.OpenBuy)
+ 263:                             action = TradeAction.Buy;
+ 264:                         break;
+ 265:                     case ExpositionSide.Short:
+ 266:                         if (signal == TradeSignal.CloseSell)
+ 267:                             action = TradeAction.Close;
+ 268:                         else if (signal == TradeSignal.OpenBuy)
+ 269:                             action = TradeAction.Revert;
+ 270:                         else if (signal == TradeSignal.OpenSell)
+ 271:                             action = TradeAction.Sell;
+ 272:                         break;
+ 273:                     case ExpositionSide.Both:
+ 274:                         #region 🐞 BUG [Bug noto da risolvere #4] 
+ 275:                         //BUG #4 Strategy active non cambia 
+ 276:                         #endregion
+ 277:                         #region 🐞 BUG [Bug noto da risolvere #5] 
+ 278:                         //BUG #5 La strategia si ritrova esposta su entrambi i lati 
+ 279:                         #endregion
+ 280:                         Core.Instance.Loggers.Log("Exposed on Both Sides positions ll be closed and strategy aborted", LoggingLevel.Trading);
+ 281:                         this.ForceClosePositions(5);
+ 282:                         //this._strategyActive = false;
+ 283:                         break;
+ 284:                     case ExpositionSide.Unexposed:
+ 285:                         if (signal == TradeSignal.OpenBuy)
+ 286:                             action = TradeAction.Buy;
+ 287:                         else if (signal == TradeSignal.OpenSell)
+ 288:                             action = TradeAction.Sell;
+ 289:                         break;
+ 290:                 }
+ 291: 
+ 292: 
+ 293:                 #region 🐞 BUG [Bug noto da risolvere #4] 
+ 294:                 //BUG #4 Strategy active non cambia 
+ 295:                 #endregion
+ 296:                 if (!_strategyActive)
+ 297:                     return;
+ 298: 
+ 299: 
+ 300:                
+ 301: 
+ 302:                 if (action == TradeAction.Buy || action == TradeAction.Sell)
+ 303:                 {
+ 304: 
+ 305:                     //🧠 HINT: [Suggerimento di flusso] il sistema continua ad aprire e chiudere items per mantenere il conto dell esposizione coerente 
+ 306:                     //🧠 HINT: [Da Verificare ] Gli Ordini per gli item chiusi vengono rimossi
+ 307:                     //🧠 HINT: [Da Verificare ] La conversione sulle quantita
+ 308: 
+ 309:                     //if (this.Metrics.ExposedCount >= _maxOpen)
+ 310:                     if (this.Metrics.ExposedAmount >= _maxOpen*this.Quantity)
+ 311:                         Core.Instance.Loggers.Log($"[TRADE SIGNAL] AVOIDED DUE MAX EXPO REACHED Signal={signal}, Action={action}", LoggingLevel.Trading);
+ 312:                     else
+ 313:                     {
+ 314:                         if (action == TradeAction.Buy)
+ 315:                         {
+ 316:                             marketData.SlTriggerPrice = this.HistoryProvider.HistoricalData[1][PriceType.Low];
+ 317:                             this.ComputeTradeAction(marketData, Side.Buy);
+ 318: 
+ 319:                         }
+ 320:                         else if (action == TradeAction.Sell)
+ 321:                         {
+ 322:                             marketData.SlTriggerPrice = this.HistoryProvider.HistoricalData[1][PriceType.High];
+ 323:                             this.ComputeTradeAction(marketData, Side.Sell);
+ 324:                         }
+ 325:                         Core.Instance.Loggers.Log($"[TRADE SIGNAL] Signal={signal}, Action={action}", LoggingLevel.Trading);
+ 326:                     }
+ 327:                 }
+ 328: 
+ 329: 
+ 330:                 //📝 TODO: [DEBUG] check if this logic works and correctly effects on items
+ 331: 
+ 332:                 if (action == TradeAction.Close)
+ 333:                 {
+ 334:                     bool res = this.ForceClosePositions(5);
+ 335: 
+ 336:                     if (res)
+ 337:                         Core.Instance.Loggers.Log($"[TRADE SIGNAL] ALL POSITIONS CLOSED Signal={signal}, Action={action}", LoggingLevel.Trading);
+ 338:                     else
+ 339:                     {
+ 340:                         Core.Instance.Loggers.Log($"[TRADE SIGNAL] FAILED TO CLOSE POSITIONS, STRATEGY STOPPED Signal={signal}, Action={action}", LoggingLevel.Error);
+ 341:                         #region 🐞 BUG [Bug noto da risolvere #4] 
+ 342:                         //BUG #4 Strategy active non cambia 
+ 343:                         #endregion
+ 344:                         this._strategyActive = false;
+ 345:                     }
+ 346:                 }
+ 347: 
+ 348:                 //📝 TODO: [DEBUG] check if this logic works and correctly effects on items
+ 349:                 if (action == TradeAction.Revert)
+ 350:                 {
+ 351:                     bool res = this.ForceClosePositions(5);
+ 352:                     if (res)
+ 353:                     {
+ 354:                         marketData.SlTriggerPrice = signal == TradeSignal.OpenBuy ?
+ 355:                             this.HistoryProvider.HistoricalData[1][PriceType.Low] : this.HistoryProvider.HistoricalData[1][PriceType.High];
+ 356:                         Core.Instance.Loggers.Log($"[TRADE SIGNAL] ALL POSITIONS CLOSED FOR REVERSAL Signal={signal}, Action={action}", LoggingLevel.Trading);
+ 357:                         this.ComputeTradeAction(marketData, signal == TradeSignal.OpenBuy ? Side.Buy : Side.Sell);
+ 358:                         Core.Instance.Loggers.Log($"[TRADE SIGNAL] NEW POSITION OPENED AFTER REVERSAL Signal={signal}, Action={action}", LoggingLevel.Trading);
+ 359:                     }
+ 360:                     else
+ 361:                     {
+ 362:                         Core.Instance.Loggers.Log($"[TRADE SIGNAL] FAILED TO CLOSE POSITIONS FOR REVERSAL, STRATEGY STOPPED Signal={signal}, Action={action}", LoggingLevel.Error);
+ 363:                         #region 🐞 BUG [Bug noto da risolvere #4] 
+ 364:                         //BUG #4 Strategy active non cambia 
+ 365:                         #endregion
+ 366:                         this._strategyActive = false;
+ 367:                     }
+ 368:                 }
+ 369: 
+ 370:                 else
+ 371:                 {
+ 372:                     // Update SL only when allowed: WAIT or aligned with exposure
+ 373:                     try
+ 374:                     {
+ 375:                         this.UpdateSlTp(marketData, isSl: true);
+ 376: 
+ 377:                     }
+ 378:                     catch { Utils.AppLog.Error("Update Sl", "Failed to update Sl"); }
+ 379:                     //📝 TODO: [LOGS] IMPLEMENTARE LOGGING SPECIFICO PER I SEGTNALI
+ 380:                 }
+ 381: 
+ 382:                 if (this._verbosityFreqCount <= this._verbosityFreq)
+ 383:                 {
+ 384:                     this._verbosityFreqCount++;
+ 385: 
+ 386:                     if (this._verbosityFreqCount == this._verbosityFreq)
+ 387:                     {
+ 388:                         Core.Instance.Loggers.Log($"[VERBOSE] Strategy status: SessionActive={StaticSessionManager.CurrentStatus}, AllowToTrade={this.AllowToTrade}", LoggingLevel.System);
+ 389:                         Core.Instance.Loggers.Log($"[VERBOSE] ExposedSide={this.Metrics.ExposedSide}, ExposedCount={this.Metrics.ExposedCount}, Signal={signal}, Action={action}", LoggingLevel.System);
+ 390:                         Core.Instance.Loggers.Log($"[VERBOSE] Signal={signal}, Action={action}", LoggingLevel.System);
+ 391:                         this._verbosityFreqCount = 0;
+ 392:                     }
+ 393:                 }
+ 394: 
+ 395: 
+ 396:             }
+ 397:             catch (Exception ex)
+ 398:             {
+ 399: 
+ 400:                 //📝 TODO: [Log]
+ 401:                 Core.Instance.Loggers.Log($"Rowan Strategy error at Update with message : {ex.Message}", LoggingLevel.Error);
+ 402:                 throw;
+ 403:             }
+ 404:         }
+ 405: 
+ 406:         private void ComputeTradeAction(SlTpData data, Side side ) => this.Trade(side, data.currentPrice, data, data);
+ 407: 
+ 408:         private bool ForceClosePositions(int max_attempt)
+ 409:         {
+ 410:             //int attempt = 0;
+ 411:             //var positions = Core.Instance.Positions.Where(p => p.Symbol == this.Symbol && p.Account == this.Account).ToList();
+ 412: 
+ 413:             //foreach (var pos in positions)
+ 414:             //    pos.Close();
+ 415: 
+ 416:             ////bool any = Core.Instance.Positions.Where(p => p.Symbol == this.Symbol && p.Account == this.Account).Any();
+ 417: 
+ 418:             ////while (any && attempt < max_attempt)
+ 419:             ////{
+ 420:             ////    any = Core.Instance.Positions.Where(p => p.Symbol == this.Symbol && p.Account == this.Account).Any();
+ 421:             ////    //📝 TODO: [Debug Required] check if items closed
+ 422: 
+ 423:             ////    System.Threading.Thread.Sleep(500);
+ 424:             ////    attempt++;
+ 425: 
+ 426:             ////    if (attempt >= max_attempt && any)
+ 427:             ////    {
+ 428:             ////        Core.Instance.Loggers.Log($"[CRITICAL] Unable to close all positions after {max_attempt} attempts!", LoggingLevel.Trading);
+ 429:             ////        return false;
+ 430:             ////    }
+ 431:             ////}
+ 432: 
+ 433:             //attempt = 0;
+ 434: 
+ 435:             //var orders = Core.Instance.Orders.Where(o => o.Symbol == this.Symbol && o.Account == this.Account &&
+ 436:             //o.Status == OrderStatus.Opened || o.Status == OrderStatus.PartiallyFilled).ToList();
+ 437: 
+ 438:             //foreach (Order ord in orders)
+ 439:             //    ord.Cancel();
+ 440: 
+ 441:             ////while (Core.Instance.Orders.Where(o => o.Symbol == this.Symbol && o.Account == this.Account &&
+ 442:             ////    o.Status == OrderStatus.Opened || o.Status == OrderStatus.PartiallyFilled).Any() && attempt < max_attempt)
+ 443:             ////{
+ 444:             ////    //📝 TODO: [Debug Required] check if items closed
+ 445: 
+ 446:             ////    System.Threading.Thread.Sleep(500);
+ 447:             ////    attempt++;
+ 448: 
+ 449:             ////    if (attempt >= max_attempt)
+ 450:             ////    {
+ 451:             ////        Core.Instance.Loggers.Log($"[CRITICAL] Unable to cancel orders {max_attempt} attempts!", LoggingLevel.Trading);
+ 452:             ////        return false;
+ 453:             ////    }
+ 454:             ////}
+ 455: 
+ 456:             //return true;
+ 457:             var posId = Core.Instance.Positions.Where(p => p.Symbol == this.Symbol && p.Account == this.Account)
+ 458:                 .Select(p => p.Id).ToList();
+ 459:             var objs = this._manager.Items.Where(x => x.Position != null && posId.Contains(x.Position.Id)).ToList();
+ 460:             foreach (var obj in objs)
+ 461:             {
+ 462: 
+ 463:                 #region 🧪 HACK [Soluzione temporanea]
+ 464:                 //Sistemare questa porcheria
+ 465:                 #endregion
+ 466: 
+ 467:                 var o = obj as TpSlItemPosition;
+ 468:                 o.TryUpdateStatus(true);
+ 469:             }
+ 470: 
+ 471:             return true;
+ 472:         }
+ 473: 
+ 474:         private TradeSignal CalculateTradeSignal()
+ 475:         {
+ 476:             int logSignCount = 0;
+ 477:             int shortSignCount = 0;
+ 478:             foreach (LineSeries sign in this._deltaBaseIndicator.LinesSeries)
+ 479:             {
+ 480: 
+ 481:                 #region 🐞 BUG [RESOLVE] #2
+ 482:                 //TUTTE LE LINESERIES RITORNANO NAN PER OGNI VALORE AD OGNI INDICE
+ 483:                 //var debug1 = sign.GetValue(1);
+ 484:                 //var debug2 = sign.GetValue(2);
+ 485:                 //var debug3 = sign.GetValue() == 0;
+ 486:                 //for (int i = 0; i < this._deltaBaseIndicator.Count; i++)
+ 487:                 //{
+ 488:                 //    if (sign[i] >= 0)
+ 489:                 //        Core.Instance.Loggers.Log($"DeltaBaseIndicator {sign.Name} value at {i} is {sign[i]}", LoggingLevel.Trading);
+ 490:                 //}
+ 491:                 //var debug4 = this._deltaBaseIndicator.HistoricalData;
+ 492:                 #endregion
+ 493: 
+ 494: 
+ 495:                 if (sign.GetValue() > 0)
+ 496:                     logSignCount++;
+ 497:                 else if (sign.GetValue() < 0)
+ 498:                     shortSignCount++;
+ 499:             }
+ 500: 
+ 501:             foreach (LineSeries sign in this._atrIndicator.LinesSeries)
+ 502:             {
+ 503:                 if (sign.GetValue() > 0)
+ 504:                     logSignCount++;
+ 505:                 else if (sign.GetValue() < 0)
+ 506:                     shortSignCount++;
+ 507:             }
+ 508: 
+ 509:             if (logSignCount == shortSignCount)
+ 510:                 return TradeSignal.Unknown;
+ 511:             else if (logSignCount > shortSignCount)
+ 512:                 if (logSignCount >= this._minTradeSign)
+ 513:                     
+ 514:                     return TradeSignal.OpenBuy;
+ 515:                 else if (logSignCount >= this._minCloseSign)
+ 516:                     return TradeSignal.CloseSell;
+ 517:                 else                     
+ 518:                     return TradeSignal.Wait;
+ 519:             else if (shortSignCount > logSignCount)
+ 520:                 if (shortSignCount >= this._minTradeSign)
+ 521:                     return TradeSignal.OpenSell;
+ 522:                 else if (logSignCount >= this._minCloseSign)
+ 523:                     return TradeSignal.CloseLong;
+ 524:                 else
+ 525:                     return TradeSignal.Wait;
+ 526:             else
+ 527:                 return TradeSignal.Unknown;
+ 528: 
+ 529: 
+ 530:         }
+ 531: 
+ 532:         private TradeSignal CalculateTradeSignal2()
+ 533:         {
+ 534:             int longCount = 0, shortCount = 0;
+ 535:             int longExitCount = 0, shortExitCount = 0;
+ 536: 
+ 537:             double rvol = GetLineValueByName(this._atrIndicator, "RvolSignal");
+ 538:             double hma = GetLineValueByName(this._atrIndicator, "HMA_Direction");
+ 539:             double vdps = GetLineValueByName(this._deltaBaseIndicator, "APAVD_Flag");
+ 540:             double vdStrong = GetLineValueByName(this._deltaBaseIndicator, "VD_Strength_Flag");
+ 541:             double vdp = GetLineValueByName(this._deltaBaseIndicator, "VD_Price_Divergent_Flag");
+ 542:             double vdtv = GetLineValueByName(this._deltaBaseIndicator, "VD_to_Volume_Flag");
+ 543: 
+ 544:             void Tally(bool use, double v, ref int pos, ref int neg)
+ 545:             {
+ 546:                 if (!use) return;
+ 547:                 if (v > 0) pos++;
+ 548:                 else if (v < 0) neg++;
+ 549:             }
+ 550: 
+ 551:             // Entry tally
+ 552:             Tally(_entryUseRVOL, rvol, ref longCount, ref shortCount);
+ 553:             Tally(_entryUseHMA, hma, ref longCount, ref shortCount);
+ 554:             Tally(_entryUseVDPS, vdps, ref longCount, ref shortCount);
+ 555:             Tally(_entryUseVDStrong, vdStrong, ref longCount, ref shortCount);
+ 556:             Tally(_entryUseVDtV, vdtv, ref longCount, ref shortCount);
+ 557:             Tally(_entryUseVDP, vdp, ref longCount, ref shortCount);
+ 558: 
+ 559:             // Exit tally
+ 560:             Tally(_exitUseRVOL, rvol, ref longExitCount, ref shortExitCount);
+ 561:             Tally(_exitUseHMA, hma, ref longExitCount, ref shortExitCount);
+ 562:             Tally(_exitUseVDPS, vdps, ref longExitCount, ref shortExitCount);
+ 563:             Tally(_exitUseVDStrong, vdStrong, ref longExitCount, ref shortExitCount);
+ 564:             Tally(_exitUseVDtV, vdtv, ref longExitCount, ref shortExitCount);
+ 565:             Tally(_exitUseVDP, vdp, ref longExitCount, ref shortExitCount);
+ 566: 
+ 567:             if (longCount == shortCount)
+ 568:                 return TradeSignal.Unknown;
+ 569:             else if (longCount > shortCount)
+ 570:                 if (longCount >= Math.Max(this._minTradeSign, _entryMinConditions))
+ 571:                     return TradeSignal.OpenBuy;
+ 572:                 else if (longExitCount >= Math.Max(this._minCloseSign, _exitMinConditions))
+ 573:                     return TradeSignal.CloseSell;
+ 574:                 else
+ 575:                     return TradeSignal.Wait;
+ 576:             else if (shortCount > longCount)
+ 577:                 if (shortCount >= Math.Max(this._minTradeSign, _entryMinConditions))
+ 578:                     return TradeSignal.OpenSell;
+ 579:                 else if (shortExitCount >= Math.Max(this._minCloseSign, _exitMinConditions))
+ 580:                     return TradeSignal.CloseLong;
+ 581:                 else
+ 582:                     return TradeSignal.Wait;
+ 583:             else
+ 584:                 return TradeSignal.Unknown;
+ 585:         }
+ 586:     }
+ 587: }
