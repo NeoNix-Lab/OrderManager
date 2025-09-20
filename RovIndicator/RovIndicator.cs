@@ -10,37 +10,47 @@ using TradingPlatform.BusinessLayer;
 namespace RovIndicator
 {
 
+    /// <summary>
+    /// RVOL-based indicator emitting two compact trading flags only:
+    ///  - Line 0 (RvolSignal): -1/0/+1 from normalized RVOL momentum vs threshold
+    ///  - Line 1 (HMA_Direction): -2/0/+2 from Close vs (classic or ATR-scaled) HMA
+    /// Internals compute RVOL short/long and an HMA-driven composite, optionally normalized by ATR.
+    /// Uses HistoricalData[1] (previous bar) for non-repainting, close-price context.
+    /// </summary>
     public class RvoIndicator : Indicator
     {
-        #region Input / Attributi e campi
+        #region Inputs & Fields
 
-        [InputParameter("Short Length", 0, 2, 200, 1)]
+        // RVOL settings
+        [InputParameter("RVOL Settings", 0)]
+        public readonly string _tagRVOL = "#############";
+        [InputParameter("Short Length", 1, 2, 200, 1)]
         public int _LenShort = 14;
-
-        [InputParameter("Long Length", 1, 5, 500, 1)]
+        [InputParameter("Long Length", 2, 5, 500, 1)]
         public int _LenLong = 60;
-
-        [InputParameter("Windosw Lenght", 2)]
-        public int _WLen = 6;
-
-
-        [InputParameter("HMA Length", 5, 2, 200, 1)]
-        public int _HmaLen = 14;
-
-        [InputParameter("Use ATR Normalization", 8)]
-        public bool _UseAtrNorm = true;
-
-        [InputParameter("ATR Length", 9, 2, 200, 1)]
-        public int _AtrLen = 14;
-
-        [InputParameter("Threshold", 10, 0.0, 1.0, 0.01)]
+        [InputParameter("Slope Threshold (norm.)", 3, 0.0, 1.0, 0.01)]
         public double _ThrSlope = 0.015;
 
-        [InputParameter("UsePrice", 10)]
+        // HMA settings
+        [InputParameter("HMA Settings", 10)]
+        public readonly string _tagHMA = "#############";
+        [InputParameter("Use Price for HMA", 11)]
         public bool _UsePrice = true;
+        [InputParameter("HMA Length", 12, 2, 200, 1)]
+        public int _HmaLen = 14;
+        [InputParameter("Use ATR-scaled HMA", 13)]
+        public bool _UseAtrScaledHma = false;
+
+        // ATR settings
+        [InputParameter("ATR Settings", 20)]
+        public readonly string _tagATR = "#############";
+        [InputParameter("Use ATR Normalization", 21)]
+        public bool _UseAtrNorm = true;
+        [InputParameter("ATR Length", 22, 2, 200, 1)]
+        public int _AtrLen = 14;
 
         #endregion
-        // Buffers (si riempiono in OnUpdate)
+        // Dependencies and rolling buffers
         private Indicator atrInd;
        
         private double prevRvolNormalized = 0;
@@ -54,39 +64,32 @@ namespace RovIndicator
         private RingBuffer<double> rvolLongBuf;
         private RingBuffer<double> hullBuffer;
 
-        // Line indices (ordine di AddLineSeries)
-        private const int LINE_RVOL_S = 0;
-        private const int LINE_RVOL_L = 1;
-        private const int LINE_RVOL_HMA = 2;
-        private const int LINE_COMPOSITE = 3;
-        private const int LINE_RVOL_NORM = 4;
-        private const int LINE_DELTA = 5;
-        private const int LINE_BASE = 6;
+        // Line indices (ordine di AddLineSeries) — SOLO segnali richiesti
+        // 0 = RVOL flag (−1/0/+1), 1 = HMA direzione (−2/0/+2)
+        private const int LINE_RVOL_SIGNAL = 0;
+        private const int LINE_HMA_DIR = 1;
 
         public RvoIndicator()
         {
             Name = "RVOL (evolved)";
-            Description = "RVOL short/long + HMA (Rvol or PriceSlope/ATR), composite & thresholds";
+            Description = "Normalized RVOL momentum and HMA direction (classic or ATR‑scaled)";
             SeparateWindow = true;
 
-            // Linee consigliate
-            AddLineSeries("RvolShort", Color.Orange, 1, LineStyle.Solid);
-            AddLineSeries("RvolLong", Color.SteelBlue, 1, LineStyle.Solid);
-            AddLineSeries("Rvol_HMA", Color.ForestGreen, 1, LineStyle.Solid);
-            AddLineSeries("Composite", Color.DarkViolet, 2, LineStyle.Solid);
-            AddLineSeries("RvolNorm", Color.Red, 2, LineStyle.Solid);
-            AddLineSeries("Delta", Color.Gray, 1, LineStyle.Dash);
-            AddLineSeries("BaseMin", Color.Gold, 1, LineStyle.DashDot);
+            // Expose only the compact, discrete signals
+            AddLineSeries("RvolSignal", Color.OrangeRed, 1, LineStyle.Solid); // −1/0/+1
+            AddLineSeries("HMA_Direction", Color.DarkCyan, 1, LineStyle.Solid);    // −2/0/+2
         }
 
         protected override void OnInit()
         {
+            this.UpdateType = IndicatorUpdateType.OnBarClose;
             this.atrInd = Core.Indicators.BuiltIn.ATR(this._AtrLen, MaMode.SMMA);
             this.HistoricalData.AddIndicator(this.atrInd);
 
             this.rvolShortBuf = new RingBuffer<double>(this._LenShort);
             this.rvolLongBuf = new RingBuffer<double>(this._LenLong);
-            this.hullBuffer = new RingBuffer<double>(this._HmaLen);
+            // Usa un buffer capiente per supportare HMA classica e scalata (fino a 200)
+            this.hullBuffer = new RingBuffer<double>(200);
         }
 
         protected override void OnUpdate(UpdateArgs args)
@@ -106,32 +109,60 @@ namespace RovIndicator
 
             if (rvolLongBuf.IsFull && rvolShortBuf.IsFull && hullBuffer.IsFull)
             {
-                var currentRvolL = vol/rvolLongBuf.ToArray().Average();
-                var currentRvolS = vol/rvolShortBuf.ToArray().Average();
+                var avgL = rvolLongBuf.ToArray().Average();
+                var avgS = rvolShortBuf.ToArray().Average();
+                var currentRvolL = (avgL > 0) ? (vol / avgL) : 0.0;
+                var currentRvolS = (avgS > 0) ? (vol / avgS) : 0.0;
 
                 var hullArray = hullBuffer.ToArray();
 
-                //#TODO : Implement HMA function
-                var hullAvarage = hullArray.Average();
+                // Calcola la lunghezza HMA effettiva: fissa o scalata da ATR
+                var atrForHma = this.atrInd?.GetValue(1) ?? 0.0;
+                int baseLen = Math.Max(2, _HmaLen);
+                int effLen = baseLen;
+                if (_UseAtrScaledHma)
+                {
+                    double atrSafe = Math.Max(atrForHma, 1e-9);
+                    int scaled = (int)Math.Round(_HmaLen / atrSafe);
+                    // clamp alla dimensione disponibile del buffer e range sensato
+                    if (scaled < 2) scaled = 2;
+                    if (scaled > 200) scaled = 200;
+                    effLen = Math.Min(scaled, hullArray.Length);
+                }
 
-                this.currentsmoothedRvol = (currentRvolS + currentRvolL + hullAvarage) / 3;
+                // Calcola HMA classica e scalata; scegli in base al parametro
+                var hmaClassic = TA.HMA_Last(hullArray, Math.Min(baseLen, hullArray.Length));
+                var hmaScaled = TA.HMA_Last(hullArray, effLen);
+                var chosenHma = _UseAtrScaledHma ? hmaScaled : hmaClassic;
+                var hmaUsed = double.IsNaN(chosenHma) ? hullArray.Average() : chosenHma;
+
+                // Composite interno (non esposto): media tra RVOL S/L e HMA
+                this.currentsmoothedRvol = (currentRvolS + currentRvolL + hmaUsed) / 3.0;
+
+                // Segnale HMA: −2 se close < HMA, +2 se close > HMA, 0 altrimenti
+                int hmaDir = 0;
+                if (!double.IsNaN(hmaUsed))
+                {
+                    var close = this.HistoricalData[1][PriceType.Close];
+                    if (close > hmaUsed) hmaDir = 2;
+                    else if (close < hmaUsed) hmaDir = -2;
+                }
+                SetValue(hmaDir, LINE_HMA_DIR);
             }
 
-            this.currentRvoNormalized = this.currentsmoothedRvol/this.atrInd.GetValue(1);
+            var atr = this.atrInd?.GetValue(1) ?? 0.0;
+            if (_UseAtrNorm && atr > 0.0 && !double.IsInfinity(atr) && !double.IsNaN(atr))
+                this.currentRvoNormalized = this.currentsmoothedRvol / atr;
+            else
+                this.currentRvoNormalized = this.currentsmoothedRvol;
 
-            if (this.prevRvolNormalized != 0 && this.prevsmoothedRvol != 0)
+            if (this.prevRvolNormalized != 0 && this.currentRvoNormalized != 0)
                 this.rvolOkey = Math.Abs(prevRvolNormalized - currentRvoNormalized) > this._ThrSlope;
-
-
-            var value = 0.0;
-
+            var signal = 0.0;
             if (rvolOkey)
-                value = this.currentsmoothedRvol > this.prevRvolNormalized ? 1.0 : -1.0;
-            SetValue(value);
-            SetValue(this.rvolOkey ? 2 : -2, 1);
+                signal = this.currentRvoNormalized > this.prevRvolNormalized ? 1.0 : -1.0;
+            SetValue(signal, LINE_RVOL_SIGNAL);
 
-            //SetValue(this.prevRvolNormalized);
-            //SetValue(currentRvoNormalized, 1);
         }
 
         
@@ -160,10 +191,10 @@ namespace RovIndicator
                 double a = wHalf.Push(values[i]); // WMA(n/2)
                 double b = wFull.Push(values[i]); // WMA(n)
 
+                // Quando entrambe le WMA sono pronte, alimenta l'output WMA(sqrt(n)).
+                // Evita di pushare NaN: inquinerebbe le somme interne e renderebbe l'output sempre NaN.
                 if (!double.IsNaN(a) && !double.IsNaN(b))
                     last = wOut.Push(2.0 * a - b);
-                else
-                    _ = wOut.Push(double.NaN); // avanza warm-up
             }
 
             return last; // NaN finché non ci sono abbastanza campioni
@@ -209,3 +240,4 @@ namespace RovIndicator
         }
     }
 }
+

@@ -7,60 +7,72 @@ using TradingPlatform.BusinessLayer;
 
 namespace DeltaBasedIndicators
 {
-
-	//📝 TODO: [ADD Logging System]
-	//📝 TODO: [Clean Close]
-	//📝 TODO: [Use Smoler HD]
-	//📝 TODO: [Allow historical]
-	//📝 TODO: [fix graphics]
-	//📝 TODO: [Update Settings]
-
-
+	/// <summary>
+	/// Delta-based indicator exposing four discrete flags only:
+	///  0: APAVD_Flag (±1)
+	///  1: VD_Strength_Flag (±2)
+	///  2: VD_Price_Divergent_Flag (±3)
+	///  3: VD_to_Volume_Flag (±4)
+	/// Robust to warm-up and zero-division; uses HistoricalData[1] for non-repainting context.
+	/// </summary>
 	public class DeltaBasedIndicators : Indicator , IVolumeAnalysisIndicator
 	{
-		[InputParameter("Avarage Price Delta Settings", 0)]
+		// APAVD (Average Price move to Average VD) settings
+		[InputParameter("APAVD Settings", 0)]
 		public readonly string _tag__uno = "#############";
 
-		[InputParameter("Use Median", 1)]
+		[InputParameter("Delta: Use Median", 1)]
 		public bool _Use_Median = false;
 
-		[InputParameter("Threshold Multiplaier", 2)]
+		[InputParameter("Delta: Threshold Multiplier", 2)]
 		public double _Trh= 2;
 
-		[InputParameter("LoockBackWindow", 3)]
+		[InputParameter("Delta: Lookback", 3)]
 		public int _LoockBackWindow= 30;
 
-		[InputParameter("Delta Strenght Settings", 0)]
+		// VD Strength settings
+		[InputParameter("VD Strength Settings", 10)]
 		public readonly string _tag__due = "#############";
 
-		[InputParameter("LoockBackWindow", 3)]
+		[InputParameter("Delta Strength: Lookback", 11)]
 		public int _LoockBackWindow_Strength = 30;
 
-		[InputParameter("Threshold Multiplaier", 2)]
+		[InputParameter("Delta Strength: Threshold Multiplier", 12)]
 		public double _Trh_Strenght = 2;
 
-		[InputParameter("Threshold Multiplaier", 2)]
-		public Session session;
+		// VD/Volume settings
+		[InputParameter("VD/Volume Settings", 20)]
+		public readonly string _tag__tre = "#############";
+
+		[InputParameter("VDtV Lookback", 21)]
+		public int _LoockBackWindow_VDtV = 30;
+
+		[InputParameter("VDtV Threshold", 22)]
+		public double _Trh_VDtV = 2;
+
+        [InputParameter("Force Volume Ready", 23)]
+        public bool _forceVolume = false;
 
         private RingBuffer<double> _DeltaBuffer;
 		private RingBuffer<double> _DeltaBuffer_Strenght;
 		private RingBuffer<double> _PriceBuffer;
+		private RingBuffer<double> _VolumeBuffer;
+		private RingBuffer<double> _DeltaBuffer_VDtV;
 		private bool volumeReady = false;
-
-		private CustomSession _session = new CustomSession();
-        public DeltaBasedIndicators()
+		public DeltaBasedIndicators()
 			: base()
 		{
 			// Defines indicator's name and description.
 			Name = "DeltaBasedIndicators";
 			Description = "My indicator's annotation";
 
-			// Defines line on demand with particular parameters.
-			AddLineSeries("Avareg Price Delta", Color.CadetBlue, 1, LineStyle.Solid);
-			AddLineSeries("Delta Strenght", Color.Red, 1, LineStyle.Solid);
-			AddLineSeries("Delta Divergent", Color.Gold, 1, LineStyle.Solid);
-            // By default indicator will be applied on main window of the chart
-            SeparateWindow = true;
+			// Output lines: all flags only
+			AddLineSeries("APAVD_Flag", Color.CadetBlue, 1, LineStyle.Solid);
+			AddLineSeries("VD_Strength_Flag", Color.Red, 1, LineStyle.Solid);
+			AddLineSeries("VD_Price_Divergent_Flag", Color.Gold, 1, LineStyle.Solid);
+			AddLineSeries("VD_to_Volume_Flag", Color.Purple, 1, LineStyle.Solid);
+
+			SeparateWindow = true;
 		}
 
 		public bool IsRequirePriceLevelsCalculation => false;
@@ -68,23 +80,20 @@ namespace DeltaBasedIndicators
 		public void VolumeAnalysisData_Loaded()
 		{
 			this.volumeReady = true;
-        }
+		}
 
 		/// <summary>
 		/// This function will be called after creating an indicator as well as after its input params reset or chart (symbol or timeframe) updates.
 		/// </summary>
 		protected override void OnInit()
 		{
+			this.UpdateType = IndicatorUpdateType.OnBarClose;
 			_DeltaBuffer = new RingBuffer<double>(_LoockBackWindow);
 			_DeltaBuffer_Strenght = new RingBuffer<double>(_LoockBackWindow_Strength);
 			_PriceBuffer = new RingBuffer<double>(_LoockBackWindow);
-			//this.HistoricalData.VolumeAnalysisCalculationProgress.ProgressChanged += VolumeAnalysisCalculationProgress_ProgressChanged;
+			_VolumeBuffer = new RingBuffer<double>(_LoockBackWindow_VDtV);
+			_DeltaBuffer_VDtV = new RingBuffer<double>(_LoockBackWindow_VDtV);
 		}
-
-		//private void VolumeAnalysisCalculationProgress_ProgressChanged(object sender, VolumeAnalysisTaskEventArgs e)
-		//{
-		//	this.volumeReady = e.ProgressPercent == 100;
-		//}
 
 		/// <summary>
 		/// Calculation entry point. This function is called when a price data updates. 
@@ -95,103 +104,134 @@ namespace DeltaBasedIndicators
 		/// <param name="args">Provides data of updating reason and incoming price.</param>
 		protected override void OnUpdate(UpdateArgs args)
 		{
-			if (!this.volumeReady)
+			// Wait until volume analysis is fully available
+			if (!this.volumeReady && ! _forceVolume)
 				return;
 
+			// Maintain rolling buffers (price)
 			if (!this._PriceBuffer.IsFull)
 				this.FillPriceBuffer();
 
 			else
 			{
-				if (_Use_Median) /*TODO : forse vuole l escursione non l intero*/
+				if (_Use_Median)
 					this._PriceBuffer.Add(this.HistoricalData[1][PriceType.Median]);
 				else
 					this._PriceBuffer.Add(Math.Abs(this.HistoricalData[1][PriceType.Close] - this.HistoricalData[1][PriceType.Open]));
 			}
 
+			// VD (delta) for current bar
 			double delta = this.HistoricalData[1].VolumeAnalysisData.Total.Delta;
 
+			// Maintain rolling buffers (delta for APAVD)
 			if (!this._DeltaBuffer.IsFull)
 				this.FillDeltaBuffer(this._LoockBackWindow, this._DeltaBuffer);
 
 			else
 				this._DeltaBuffer.Add(Math.Abs(delta));
 
+			// Maintain rolling buffers (delta for Strength)
 			if (!this._DeltaBuffer_Strenght.IsFull)
 				this.FillDeltaBuffer(_LoockBackWindow_Strength, this._DeltaBuffer_Strenght);
 			else
 				this._DeltaBuffer_Strenght.Add(Math.Abs(delta));
+
+			// VDtV buffers
+			if (!this._VolumeBuffer.IsFull)
+				this.FillVolumeBuffer();
+			else
+				this._VolumeBuffer.Add(this.HistoricalData[1][PriceType.Volume]);
+
+			if (!this._DeltaBuffer_VDtV.IsFull)
+				this.FillDeltaBuffer(_LoockBackWindow_VDtV, this._DeltaBuffer_VDtV);
+			else
+				this._DeltaBuffer_VDtV.Add(Math.Abs(delta));
+
+			// Ensure buffers are ready before using averages
+			if (!this._PriceBuffer.IsFull || !this._DeltaBuffer.IsFull || !this._DeltaBuffer_Strenght.IsFull)
+				return;
 
 			var priceMedian = this._PriceBuffer.ToArray().Average();
 			var deltaMedian = this._DeltaBuffer.ToArray().Average();
 			var deltaMedian_strenght = this._DeltaBuffer_Strenght.ToArray().Average();
 
 
-			var APAVD = priceMedian / deltaMedian;
-			var CPVD = this._PriceBuffer.ToArray().Last() / this._DeltaBuffer.ToArray().Last();
+			double APAVD;
+			if (deltaMedian > 0)
+				APAVD = priceMedian / deltaMedian;
+			else
+				APAVD = double.PositiveInfinity; // force isOkey to false
 
-			bool isOkey = CPVD > APAVD * this._Trh;
+			var lastDeltaAbs = Math.Abs(this._DeltaBuffer.ToArray().Last());
+			double CPVD = lastDeltaAbs > 0 ? this._PriceBuffer.ToArray().Last() / lastDeltaAbs : 0.0;
+
+			bool isOkey = !double.IsInfinity(APAVD) && !double.IsNaN(APAVD) && CPVD > APAVD * this._Trh;
 			bool isOkeyStrenght = Math.Abs(delta) > deltaMedian_strenght*this._Trh_Strenght;
 
-			double value = !isOkey ? 0 : delta > 0 ? 1 : -1;
-			double value_strenght = !isOkeyStrenght ? 0 : delta > 0 ? 2 : -2;
+			double value = !isOkey ? 0 : (delta > 0 ? 1 : -1);
+			double value_strenght = !isOkeyStrenght ? 0 : (delta > 0 ? 1 : -1);
 
-			bool isDivergent = Math.Sign(value) != Math.Sign(this.HistoricalData[1][PriceType.Close] - this.HistoricalData[1][PriceType.Open]);
-			var delta_resoult = delta == 0 ? 0 : isDivergent ? 3 : -3;
+			// Divergenza: segno del VD vs direzione del prezzo
+			int priceSign = Math.Sign(this.HistoricalData[1][PriceType.Close] - this.HistoricalData[1][PriceType.Open]);
+			int vdSign = Math.Sign(delta);
+			int delta_resoult = (priceSign != 0 && vdSign != 0 && vdSign != priceSign) ? (vdSign > 0 ? 1 : -1) : 0;
 
 			
 
-            SetValue(value);
-			SetValue(value_strenght,1);
-			SetValue(delta_resoult, 2);
+			// Scale flags for readability: line0=±1, line1=±2, line2=±3, line3=±4
+			SetValue(value); // ±1 or 0
+			int strengthFlag = value_strenght == 0 ? 0 : (value_strenght > 0 ? 2 : -2);
+			SetValue(strengthFlag, 1);
+			int divFlag = delta_resoult == 0 ? 0 : (delta_resoult > 0 ? 3 : -3);
+			SetValue(divFlag, 2);
 
-			Calculate_Strength();
-        }
+			// VDtV flag (|VD|/Vol vs medie)
+			if (this._VolumeBuffer.IsFull && this._DeltaBuffer_VDtV.IsFull)
+			{
+				var avgVD_v = this._DeltaBuffer_VDtV.ToArray().Average();
+				var avgVol = this._VolumeBuffer.ToArray().Average();
+				var vdNow = Math.Abs(delta);
+				var volNow = this.HistoricalData[1][PriceType.Volume];
 
-		private void Calculate_Strength()
-		{
-			var buy_streng = 0;
+				double baseRatio = (avgVol > 0) ? (avgVD_v / avgVol) : double.NaN;
+				double curRatio = (volNow > 0) ? (vdNow / volNow) : 0.0;
 
-			for (int i = 0; i <3; i++)
-                if (this.LinesSeries[i].GetValue() > 0)
-                    buy_streng++;
+				bool strongVDtV = !double.IsNaN(baseRatio) && !double.IsInfinity(baseRatio) && baseRatio > 0 && curRatio > baseRatio * this._Trh_VDtV;
+				int vdtvFlag = strongVDtV ? (delta > 0 ? 1 : -1) : 0;
+				int vdtvFlagScaled = vdtvFlag == 0 ? 0 : (vdtvFlag > 0 ? 4 : -4);
+				SetValue(vdtvFlagScaled, 3);
+			}
 
-			if (buy_streng >= 2)
-                for (int i = 0; i < 3; i++)
-                    if (this.LinesSeries[i].GetValue() > 0)
-						this.LinesSeries[i].SetMarker(0,new IndicatorLineMarker(Color.Green, IndicatorLineMarkerIconType.UpArrow));
+		}
 
-            var sell_streng = 0;
 
-            for (int i = 0; i < 3; i++)
-                if (this.LinesSeries[i].GetValue() < 0)
-                    sell_streng++;
-
-			if (sell_streng >= 2)
-				for (int i = 0; i < 3; i++)
-					if (this.LinesSeries[i].GetValue() < 0)
-                        this.LinesSeries[i].SetMarker(0, new IndicatorLineMarker(Color.Red, IndicatorLineMarkerIconType.DownArrow));
-
-        }
-
-        private void FillDeltaBuffer(int period, RingBuffer<double> ringBuffer)
+		private void FillDeltaBuffer(int period, RingBuffer<double> ringBuffer)
 		{
 			if (this.Count < period)
-				return; /*TODO : log TODO : Verifica che delta sia == buy - sell*/
+				return; // Not enough bars to seed the buffer
 
 			for (int i = period; i > 0; i--)
 				ringBuffer.Add(Math.Abs(this.HistoricalData[i].VolumeAnalysisData.Total.Delta));
 
 		}
 
-        private void FillPriceBuffer()
+		private void FillVolumeBuffer()
+		{
+			if (this.Count < this._LoockBackWindow_VDtV)
+				return;
+
+			for (int i = this._LoockBackWindow_VDtV; i > 0; i--)
+				this._VolumeBuffer.Add(this.HistoricalData[i][PriceType.Volume]);
+		}
+
+		private void FillPriceBuffer()
 		{
 			if (this.Count < this._LoockBackWindow)
-				return; /*TODO : log*/
+				return; // Not enough bars to seed the buffer
 
 			for (int i = this._LoockBackWindow;  i > 0; i--)
 			{
-				if (this._Use_Median) /*TODO : forse vuole l escursione non l intero*/
+				if (this._Use_Median)
 					this._PriceBuffer.Add(this.HistoricalData[i][PriceType.Median]);
 				else
 					this._PriceBuffer.Add(Math.Abs(this.HistoricalData[i][PriceType.Close] - this.HistoricalData[i][PriceType.Open]));
@@ -200,3 +240,4 @@ namespace DeltaBasedIndicators
 		}
 	}
 }
+
