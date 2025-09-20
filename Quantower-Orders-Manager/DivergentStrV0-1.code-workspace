@@ -1,0 +1,40 @@
+{
+    "folders": [
+        {
+            "name": "Quantower Orders Manager",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/bin": true,
+            "**/obj": true,
+            "**/.vs": true
+        },
+        "omnisharp.enableEditorConfigSupport": true,
+        "omnisharp.enableRoslynAnalyzers": true,
+        "dotnet.completion.showCompletionItemsFromUnimportedNamespaces": true
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-dotnettools.csharp",
+            "ms-dotnettools.vscode-dotnet-runtime",
+            "editorconfig.editorconfig"
+        ]
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "Launch DivergentStrV0-1",
+                "type": "coreclr",
+                "request": "launch",
+                "program": "${workspaceFolder}/bin/Debug/net6.0/DivergentStrV0-1.dll",
+                "args": [],
+                "cwd": "${workspaceFolder}",
+                "console": "internalConsole",
+                "stopAtEntry": false
+            }
+        ]
+    }
+}
