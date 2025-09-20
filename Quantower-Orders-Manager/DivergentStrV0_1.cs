@@ -359,7 +359,7 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
 
-                settings.Add(new SettingItemDouble("Max Tp In Ticks", _maxTpInTicks)
+                settings.Add(new SettingItemDouble("Min Tp In Ticks", _maxTpInTicks)
                 {
                     Text = "Max TP In Ticks",
                     SortIndex = 3005,
@@ -644,6 +644,186 @@ namespace DivergentStrV0_1
 
                 return settings;
             }
+
+            set
+            {
+                base.Settings = value;
+
+                try
+                {
+                    // ===== Sessions =====
+                    if (value.TryGetValue(KEY_SESS_COUNT, out int sessCount))
+                        _CustomSessionsCount = Math.Max(0, Math.Min(3, sessCount));
+
+                    if (value.TryGetValue(KEY_SESS_USEDEFAULT, out bool useDefault))
+                        _UseDefaultSessions = useDefault;
+
+                    _CustomSessions.Clear();
+                    _sessionDays.Clear();
+
+                    for (int i = 0; i < _CustomSessionsCount; i++)
+                    {
+                        try
+                        {
+                            DateTime startDateTime = DateTime.UtcNow;
+                            DateTime endDateTime = DateTime.UtcNow;
+
+                            if (value.TryGetValue($"session{i + 1}Start", out DateTime startDt))
+                                startDateTime = Core.Instance.TimeUtils.ConvertFromTimeZoneToUTC(startDt, Core.Instance.TimeUtils.SelectedTimeZone);
+                            if (value.TryGetValue($"session{i + 1}End", out DateTime endDt))
+                                endDateTime = Core.Instance.TimeUtils.ConvertFromTimeZoneToUTC(endDt, Core.Instance.TimeUtils.SelectedTimeZone);
+
+                            TimeOnly start = TimeOnly.FromDateTime(startDateTime);
+                            TimeOnly end = TimeOnly.FromDateTime(endDateTime);
+
+                            if (start == end)
+                            {
+                                Core.Instance.Loggers.Log($"Warning: Session {i + 1} has same start and end time", LoggingLevel.Error);
+                            }
+
+                            List<DayOfWeek> activeDays = new List<DayOfWeek>();
+                            foreach (DayOfWeek day in Enum.GetValues(typeof(DayOfWeek)))
+                            {
+                                if (value.TryGetValue($"session{i + 1}On{day}", out bool dayActive) && dayActive)
+                                {
+                                    activeDays.Add(day);
+                                }
+                            }
+
+                            if (activeDays.Count == 0)
+                            {
+                                activeDays.AddRange(new[]
+                                {
+                        DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+                        DayOfWeek.Thursday, DayOfWeek.Friday
+                    });
+                                Core.Instance.Loggers.Log($"Session {i + 1}: No days selected, defaulting to weekdays", LoggingLevel.Error);
+                            }
+
+                            _sessionDays[i] = activeDays;
+                            _CustomSessions.Add(new SimpleSessionUtc($"CustomSession{i + 1}", activeDays, start, end));
+                        }
+                        catch (Exception ex)
+                        {
+                            Core.Instance.Loggers.Log($"Error creating session {i + 1}: {ex.Message}", LoggingLevel.Error);
+                        }
+                    }
+
+                    // ===== Strategy =====
+                    if (value.TryGetValue("Quantity", out double qty))
+                        _quantity = Math.Max(0.0001, qty);
+
+                    if (value.TryGetValue("Min SL In Ticks", out double minSl))
+                        _minSlInTicks = Math.Max(1, minSl);
+
+                    if (value.TryGetValue("Max SL In Ticks", out double maxSl))
+                        _maxSlInTicks = Math.Max(_minSlInTicks, maxSl);
+
+                    if (value.TryGetValue("Max Tp In Ticks", out double maxTp))
+                        _maxTpInTicks = Math.Max(1, maxTp);
+
+                    if (value.TryGetValue("Max Open Positions", out int maxOpen))
+                        _maxOpen = Math.Max(1, maxOpen);
+
+                    if (value.TryGetValue("Max Session Loss USD", out double msu))
+                        _maxSessionLossUsd = msu;
+
+                    if (value.TryGetValue("Verbosity Frequency", out int vf))
+                        _verbosityFrequency = Math.Max(0, vf);
+
+                    if (value.TryGetValue("Slippage ATR Period", out int sap))
+                        _slippageAtrPeriod = Math.Max(1, sap);
+
+                    if (value.TryGetValue("Debug", out bool debugMode))
+                    {
+                        _debugMode = debugMode;
+                        Debug = debugMode;
+                    }
+
+                    // ===== Entry Conditions =====
+                    if (value.TryGetValue("Entry: Min Conditions", out int eMin))
+                        _entryMinConditions = Math.Max(0, eMin);
+
+                    if (value.TryGetValue("Entry Use: RVOL", out bool eRvol))
+                        _entryUseRVOL = eRvol;
+
+                    if (value.TryGetValue("Entry Use: VDPS", out bool eVDPS))
+                        _entryUseVDPS = eVDPS;
+
+                    if (value.TryGetValue("Entry Use: VDstrong", out bool eVDstrong))
+                        _entryUseVDStrong = eVDstrong;
+
+                    if (value.TryGetValue("Entry Use: HMA", out bool eHma))
+                        _entryUseHMA = eHma;
+
+                    if (value.TryGetValue("Entry Use: VDtV", out bool eVDtV))
+                        _entryUseVDtV = eVDtV;
+
+                    if (value.TryGetValue("Entry Use: VDP", out bool eVDP))
+                        _entryUseVDP = eVDP;
+
+                    // ===== Exit Conditions =====
+                    if (value.TryGetValue("Exit: Min Conditions", out int xMin))
+                        _exitMinConditions = Math.Max(0, xMin);
+
+                    if (value.TryGetValue("Exit Use: RVOL", out bool xRvol))
+                        _exitUseRVOL = xRvol;
+
+                    if (value.TryGetValue("Exit Use: VDPS", out bool xVDPS))
+                        _exitUseVDPS = xVDPS;
+
+                    if (value.TryGetValue("Exit Use: VDstrong", out bool xVDstrong))
+                        _exitUseVDStrong = xVDstrong;
+
+                    if (value.TryGetValue("Exit Use: HMA", out bool xHma))
+                        _exitUseHMA = xHma;
+
+                    if (value.TryGetValue("Exit Use: VDtV", out bool xVDtV))
+                        _exitUseVDtV = xVDtV;
+
+                    if (value.TryGetValue("Exit Use: VDP", out bool xVDP))
+                        _exitUseVDP = xVDP;
+
+                    // ===== ATR =====
+                    if (value.TryGetValue("ATR Length", out int atrLen))
+                        _uiAtrLen = atrLen;
+
+                    if (value.TryGetValue("Use ATR Normalization", out bool atrNorm))
+                        _uiAtrNormalize = atrNorm;
+
+                    if (value.TryGetValue("Slope Threshold (norm.)", out double atrThr))
+                        _uiAtrSlopeThr = atrThr;
+
+                    if (value.TryGetValue("ATR Slippage Multiplier", out double atrSlip))
+                        _uiAtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, atrSlip));
+
+                    // ===== Delta =====
+                    if (value.TryGetValue("Delta: Use Median", out bool dMed))
+                        _uiDeltaUseMedian = dMed;
+
+                    if (value.TryGetValue("Delta: Lookback", out double dLb))
+                        _uiDeltaLookback = dLb;
+
+                    if (value.TryGetValue("Delta: Threshold Multiplier", out double dTh))
+                        _uiDeltaThresholdMult = dTh;
+
+                    if (value.TryGetValue("Delta Strength: Lookback", out double dSLb))
+                        _uiDeltaStrengthLookback = dSLb;
+
+                    if (value.TryGetValue("Delta Strength: Threshold Multiplier", out double dSTh))
+                        _uiDeltaStrengthMult = dSTh;
+                }
+                catch (Exception ex)
+                {
+                    Core.Instance.Loggers.Log($"Error updating settings: {ex.Message}", LoggingLevel.Error);
+
+                    // Reset a valori sicuri
+                    _CustomSessionsCount = 0;
+                    _CustomSessions.Clear();
+                    _sessionDays.Clear();
+                }
+            }
+
         }
 
 
