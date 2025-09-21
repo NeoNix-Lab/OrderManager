@@ -1,19 +1,31 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <BaseOutputPath>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\bin\plug-ins\StrategyLogViewer</BaseOutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <OutputPath>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\..\..\Settings\Scripts\plug-ins\StrategyLogViewer\</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <OutputPath>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\..\..\Settings\Scripts\plug-ins\StrategyLogViewer\</OutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Remove="HTML\layout.html" />
   </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="HTML\layout.html" />
   </ItemGroup>
+
   <ItemGroup>
-    <ProjectReference Include="..\..\DivergentStrV0-1.csproj" />
+    <ProjectReference Include="..\..\Quantower-Orders-Manager\DivergentStrV0-1.csproj" />
   </ItemGroup>
+
   <ItemGroup>
     <Reference Include="TradingPlatform.BusinessLayer">
       <HintPath>Resources\TradingPlatform.BusinessLayer.dll</HintPath>

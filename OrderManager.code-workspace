@@ -3,18 +3,6 @@
         {
             "name": "Order Manager - Root",
             "path": "."
-        },
-        {
-            "name": "Quantower Orders Manager",
-            "path": "./Quantower-Orders-Manager"
-        },
-        {
-            "name": "Delta Based Indicators",
-            "path": "./DeltaBasedIndicators"
-        },
-        {
-            "name": "Rov Indicator",
-            "path": "./RovIndicator"
         }
     ],
     "settings": {
@@ -33,8 +21,18 @@
         "files.autoSaveDelay": 1000,
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-            "source.organizeImports": true
-        }
+            "source.organizeImports": "explicit"
+        },
+        "dotrush.roslyn.projectOrSolutionFiles": [
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\DeltaBasedIndicators\\DeltaBasedIndicators.sln",
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\Quantower-Orders-Manager\\DivergentStrV0-1.sln",
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\RovIndicator\\RovIndicator.sln",
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\DeltaBasedIndicators\\DeltaBasedIndicators.csproj",
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\Quantower-Orders-Manager\\DivergentStrV0-1.csproj",
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\Quantower-Orders-Manager.Tests\\Quantower-Orders-Manager.Tests.csproj",
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\RovIndicator\\RovIndicator.csproj",
+            "c:\\Users\\user\\Desktop\\Condivisa\\AddingPlugIns\\OrderManager\\Plugins\\StrategyLogPlugin\\StrategyLogPlugin.csproj"
+        ]
     },
     "extensions": {
         "recommendations": [
@@ -87,7 +85,9 @@
                 "label": "build-all",
                 "type": "shell",
                 "command": "dotnet",
-                "args": ["build"],
+                "args": [
+                    "build"
+                ],
                 "group": {
                     "kind": "build",
                     "isDefault": true
@@ -104,7 +104,9 @@
                 "label": "clean-all",
                 "type": "shell",
                 "command": "dotnet",
-                "args": ["clean"],
+                "args": [
+                    "clean"
+                ],
                 "group": "build",
                 "presentation": {
                     "echo": true,

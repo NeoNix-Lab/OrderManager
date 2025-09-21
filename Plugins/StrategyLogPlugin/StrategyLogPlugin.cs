@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,7 +34,7 @@ namespace StrategyLogPlugin
             {
                 Name = "StrategyLogPlugin",
                 Title = "Strategy Log Viewer",
-                Group = PluginGroup.Tools,
+                Group = PluginGroup.Misc,
                 ShortName = "Logs",
                 TemplateName = "layout.html",
                 WindowParameters = new NativeWindowParameters(NativeWindowParameters.Panel)
@@ -45,9 +45,10 @@ namespace StrategyLogPlugin
                     BindingBehaviour = BindingBehaviour.Bindable,
                     AllowCloseButton = true,
                     AllowFullScreenButton = false,
+                    WindowDefaultPositionType = NativeWindowDefaultPositionType.CenterScreen,
                     AllowActionsButton = false,
                     AllowMaximizeButton = false,
-                    StickingEnabled = StickyWindowBehavior.AllowSticking
+                    StickingEnabled = StickyWindowBehavior.AllowSticking,
                 },
                 CustomProperties = new Dictionary<string, object>()
                 {
@@ -120,7 +121,7 @@ namespace StrategyLogPlugin
                 .Where(MatchFilter)
                 .OrderByDescending(e => e.TimestampUtc)
                 .Take(MaxClientRows)
-                .OrderBy(e => e.TimestampUtc) // preserve chronological order after take
+                .OrderBy(e => e.TimestampUtc)
                 .Select(entry => new LogEntryViewModel(entry))
                 .ToList();
 

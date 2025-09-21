@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <Platforms>AnyCPU</Platforms>
@@ -10,7 +10,7 @@
     <RootNamespace>DivergentStrV0_1</RootNamespace>
     <StartAction>Program</StartAction>
     <StartProgram>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\Console.StarterNew.exe</StartProgram>
-    <StartArguments>--address 127.0.0.1 --port 52025</StartArguments>
+    <StartArguments>--address 127.0.0.1 --port 57282</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <OutputPath>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\..\..\Settings\Scripts\Strategies\DivergentStrV0-1</OutputPath>
