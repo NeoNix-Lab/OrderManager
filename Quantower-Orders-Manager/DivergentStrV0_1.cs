@@ -49,6 +49,9 @@ namespace DivergentStrV0_1
         private double _uiDeltaThresholdMult = 2.0;
         private double _uiDeltaStrengthLookback = 30.0;
         private double _uiDeltaStrengthMult = 2.0;
+
+        //📝 TODO: [Questo Multiplier e inutile]
+
         private double _uiDeltaDivergenceMult = 1.0;
         private double _uiDeltaVDtVMult = 2.0;
         #endregion
@@ -104,18 +107,6 @@ namespace DivergentStrV0_1
 
         [InputParameter("Period", 4)]
         public Period _period = Period.MIN1;
-
-        [InputParameter("Delta Threshold Multiplier", 5)]
-        public double _inputDeltaThresholdMultiplier = 2.0;
-
-        [InputParameter("Delta Strength Threshold Multiplier", 6)]
-        public double _inputDeltaStrengthThresholdMultiplier = 2.0;
-
-        [InputParameter("Delta Divergence Threshold Multiplier", 7)]
-        public double _inputDeltaDivergenceThresholdMultiplier = 1.0;
-
-        [InputParameter("VDtV Threshold Multiplier", 8)]
-        public double _inputVDtVThresholdMultiplier = 2.0;
         #endregion
 
         #region ====== Runtime State ======
@@ -157,10 +148,7 @@ namespace DivergentStrV0_1
 
         protected override void OnRun()
         {
-            _uiDeltaThresholdMult = _inputDeltaThresholdMultiplier;
-            _uiDeltaStrengthMult = _inputDeltaStrengthThresholdMultiplier;
-            _uiDeltaDivergenceMult = _inputDeltaDivergenceThresholdMultiplier;
-            _uiDeltaVDtVMult = _inputVDtVThresholdMultiplier;
+            // UI parameters are initialized from their defaults or from Settings UI.
 
             // Indicators
             this.AtrIndicator = Core.Instance.Indicators.CreateIndicator(
@@ -592,20 +580,44 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
+                // HMA-related settings
+                settings.Add(new SettingItemBoolean(nameof(_uiHmaUsePrice), _uiHmaUsePrice)
+                {
+                    Text = "Use Price for HMA",
+                    SortIndex = 4002,
+                    Relation = new SettingItemRelationVisibility(KEY_ATR, true)
+                });
+
+                settings.Add(new SettingItemInteger(nameof(_uiHmaLen), _uiHmaLen)
+                {
+                    Text = "HMA Length",
+                    SortIndex = 4003,
+                    Minimum = 2,
+                    Maximum = 200,
+                    Relation = new SettingItemRelationVisibility(KEY_ATR, true)
+                });
+
                 settings.Add(new SettingItemBoolean(nameof(_uiAtrNormalize), _uiAtrNormalize)
                 {
                     Text = "Use ATR Normalization",
-                    SortIndex = 4002,
+                    SortIndex = 4004,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
                 settings.Add(new SettingItemDouble(nameof(_uiAtrSlopeThr), _uiAtrSlopeThr)
                 {
                     Text = "Slope Threshold (norm.)",
-                    SortIndex = 4003,
+                    SortIndex = 4005,
                     Minimum = 0.0,
                     Maximum = 1.0,
                     Increment = 0.001,
+                    Relation = new SettingItemRelationVisibility(KEY_ATR, true)
+                });
+
+                settings.Add(new SettingItemBoolean(nameof(_uiUseAtrScaledHma), _uiUseAtrScaledHma)
+                {
+                    Text = "Use ATR-scaled HMA",
+                    SortIndex = 4006,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
                 #endregion
@@ -829,11 +841,20 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue("ATR Length", out int atrLen))
                         _uiAtrLen = atrLen;
 
+                    if (value.TryGetValue("Use Price for HMA", out bool hmaUsePrice))
+                        _uiHmaUsePrice = hmaUsePrice;
+
+                    if (value.TryGetValue("HMA Length", out int hmaLen))
+                        _uiHmaLen = Math.Max(2, Math.Min(200, hmaLen));
+
                     if (value.TryGetValue("Use ATR Normalization", out bool atrNorm))
                         _uiAtrNormalize = atrNorm;
 
                     if (value.TryGetValue("Slope Threshold (norm.)", out double atrThr))
                         _uiAtrSlopeThr = atrThr;
+
+                    if (value.TryGetValue("Use ATR-scaled HMA", out bool useAtrScaledHma))
+                        _uiUseAtrScaledHma = useAtrScaledHma;
 
                     if (value.TryGetValue("ATR Slippage Multiplier", out double atrSlip))
                         _uiAtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, atrSlip));
