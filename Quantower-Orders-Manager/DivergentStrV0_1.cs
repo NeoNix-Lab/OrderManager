@@ -39,21 +39,23 @@ namespace DivergentStrV0_1
         private int _uiRvolLongLen = 60;
 
         private bool _uiHmaUsePrice = true;
-        private int _uiHmaLen = 14;
+        private int _uiHmaLenComposite = 14;
+        private int _uiHmaLenPure = 14;
         private bool _uiUseAtrScaledHma = false;
         #endregion
 
         #region ====== Delta Settings (UI) ======
         private bool _uiDeltaUseMedian = false;
-        private double _uiDeltaLookback = 30.0;
+        private int _uiDeltaLookback = 30;
         private double _uiDeltaThresholdMult = 2.0;
-        private double _uiDeltaStrengthLookback = 30.0;
+        private int _uiDeltaStrengthLookback = 30;
         private double _uiDeltaStrengthMult = 2.0;
 
         //📝 TODO: [Questo Multiplier e inutile]
 
         private double _uiDeltaDivergenceMult = 1.0;
         private double _uiDeltaVDtVMult = 2.0;
+        private int _uiVDtVLookback = 30;
         #endregion
 
         #region ====== Sessions ======
@@ -163,7 +165,8 @@ namespace DivergentStrV0_1
                 new SettingItemInteger("Short Length", _uiRvolShortLen),
                 new SettingItemInteger("Long Length", _uiRvolLongLen),
                 new SettingItemBoolean("Use Price for HMA", _uiHmaUsePrice),
-                new SettingItemInteger("HMA Length", _uiHmaLen),
+                new SettingItemInteger("HMA Length (Composite)", _uiHmaLenComposite),
+                new SettingItemInteger("HMA Length (Pure)", _uiHmaLenPure),
                 new SettingItemBoolean("Use ATR-scaled HMA", _uiUseAtrScaledHma),
                 new SettingItemInteger("ATR Length", _uiAtrLen),
                 new SettingItemBoolean("Use ATR Normalization", _uiAtrNormalize),
@@ -175,11 +178,12 @@ namespace DivergentStrV0_1
             {
                 new SettingItemBoolean("Force Volume Ready", true),
                 new SettingItemBoolean("Delta: Use Median", _uiDeltaUseMedian),
-                new SettingItemDouble("Delta: Lookback", _uiDeltaLookback),
+                new SettingItemInteger("Delta: Lookback", _uiDeltaLookback),
                 new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
-                new SettingItemDouble("Delta Strength: Lookback", _uiDeltaStrengthLookback),
+                new SettingItemInteger("Delta Strength: Lookback", _uiDeltaStrengthLookback),
                 new SettingItemDouble("Delta Strength: Threshold Multiplier", _uiDeltaStrengthMult),
                 new SettingItemDouble("VD Divergence: Threshold Multiplier", _uiDeltaDivergenceMult),
+                new SettingItemInteger("VDtV Lookback", _uiVDtVLookback),
                 new SettingItemDouble("VDtV Threshold Multiplier", _uiDeltaVDtVMult)
             };
 
@@ -588,10 +592,19 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
-                settings.Add(new SettingItemInteger(nameof(_uiHmaLen), _uiHmaLen)
+                settings.Add(new SettingItemInteger(nameof(_uiHmaLenComposite), _uiHmaLenComposite)
                 {
-                    Text = "HMA Length",
+                    Text = "HMA Length (Composite)",
                     SortIndex = 4003,
+                    Minimum = 2,
+                    Maximum = 200,
+                    Relation = new SettingItemRelationVisibility(KEY_ATR, true)
+                });
+
+                settings.Add(new SettingItemInteger(nameof(_uiHmaLenPure), _uiHmaLenPure)
+                {
+                    Text = "HMA Length (Pure)",
+                    SortIndex = 4004,
                     Minimum = 2,
                     Maximum = 200,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
@@ -600,14 +613,14 @@ namespace DivergentStrV0_1
                 settings.Add(new SettingItemBoolean(nameof(_uiAtrNormalize), _uiAtrNormalize)
                 {
                     Text = "Use ATR Normalization",
-                    SortIndex = 4004,
+                    SortIndex = 4005,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
                 settings.Add(new SettingItemDouble(nameof(_uiAtrSlopeThr), _uiAtrSlopeThr)
                 {
                     Text = "Slope Threshold (norm.)",
-                    SortIndex = 4005,
+                    SortIndex = 4006,
                     Minimum = 0.0,
                     Maximum = 1.0,
                     Increment = 0.001,
@@ -617,7 +630,7 @@ namespace DivergentStrV0_1
                 settings.Add(new SettingItemBoolean(nameof(_uiUseAtrScaledHma), _uiUseAtrScaledHma)
                 {
                     Text = "Use ATR-scaled HMA",
-                    SortIndex = 4006,
+                    SortIndex = 4007,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
                 #endregion
@@ -636,7 +649,7 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
-                settings.Add(new SettingItemDouble(nameof(_uiDeltaLookback), _uiDeltaLookback)
+                settings.Add(new SettingItemInteger(nameof(_uiDeltaLookback), _uiDeltaLookback)
                 {
                     Text = "Delta: Lookback",
                     SortIndex = 5002,
@@ -655,7 +668,7 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
-                settings.Add(new SettingItemDouble(nameof(_uiDeltaStrengthLookback), _uiDeltaStrengthLookback)
+                settings.Add(new SettingItemInteger(nameof(_uiDeltaStrengthLookback), _uiDeltaStrengthLookback)
                 {
                     Text = "Delta Strength: Lookback",
                     SortIndex = 5004,
@@ -691,6 +704,15 @@ namespace DivergentStrV0_1
                     Minimum = 0.1,
                     Maximum = 20.0,
                     Increment = 0.1,
+                    Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
+                });
+
+                settings.Add(new SettingItemInteger(nameof(_uiVDtVLookback), _uiVDtVLookback)
+                {
+                    Text = "VDtV Lookback",
+                    SortIndex = 5008,
+                    Minimum = 5,
+                    Maximum = 1000,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
                 #endregion
@@ -844,8 +866,19 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue("Use Price for HMA", out bool hmaUsePrice))
                         _uiHmaUsePrice = hmaUsePrice;
 
-                    if (value.TryGetValue("HMA Length", out int hmaLen))
-                        _uiHmaLen = Math.Max(2, Math.Min(200, hmaLen));
+                    // New separate HMA lengths
+                    if (value.TryGetValue("HMA Length (Composite)", out int hmaLenComp))
+                        _uiHmaLenComposite = Math.Max(2, Math.Min(200, hmaLenComp));
+
+                    if (value.TryGetValue("HMA Length (Pure)", out int hmaLenPure))
+                        _uiHmaLenPure = Math.Max(2, Math.Min(200, hmaLenPure));
+
+                    // Backward compatibility: if old key exists, apply to both
+                    if (value.TryGetValue("HMA Length", out int hmaLenOld))
+                    {
+                        _uiHmaLenComposite = Math.Max(2, Math.Min(200, hmaLenOld));
+                        _uiHmaLenPure = Math.Max(2, Math.Min(200, hmaLenOld));
+                    }
 
                     if (value.TryGetValue("Use ATR Normalization", out bool atrNorm))
                         _uiAtrNormalize = atrNorm;
@@ -866,14 +899,14 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue("Delta: Use Median", out bool dMed))
                         _uiDeltaUseMedian = dMed;
 
-                    if (value.TryGetValue("Delta: Lookback", out double dLb))
-                        _uiDeltaLookback = dLb;
+                    if (value.TryGetValue("Delta: Lookback", out int dLb))
+                        _uiDeltaLookback = Math.Max(5, Math.Min(1000, dLb));
 
                     if (value.TryGetValue("Delta: Threshold Multiplier", out double dTh))
                         _uiDeltaThresholdMult = dTh;
 
-                    if (value.TryGetValue("Delta Strength: Lookback", out double dSLb))
-                        _uiDeltaStrengthLookback = dSLb;
+                    if (value.TryGetValue("Delta Strength: Lookback", out int dSLb))
+                        _uiDeltaStrengthLookback = Math.Max(5, Math.Min(1000, dSLb));
 
                     if (value.TryGetValue("Delta Strength: Threshold Multiplier", out double dSTh))
                         _uiDeltaStrengthMult = dSTh;
@@ -883,6 +916,9 @@ namespace DivergentStrV0_1
 
                     if (value.TryGetValue("VDtV Threshold Multiplier", out double vdtvTh))
                         _uiDeltaVDtVMult = vdtvTh;
+
+                    if (value.TryGetValue("VDtV Lookback", out int vdtvLb))
+                        _uiVDtVLookback = Math.Max(5, Math.Min(1000, vdtvLb));
                 }
                 catch (Exception ex)
                 {

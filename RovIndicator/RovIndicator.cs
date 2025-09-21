@@ -28,25 +28,27 @@ namespace RovIndicator
         public int _LenShort = 14;
         [InputParameter("Long Length", 2, 5, 500, 1)]
         public int _LenLong = 60;
-        [InputParameter("Slope Threshold (norm.)", 3, 0.0, 1.0, 0.01)]
-        public double _ThrSlope = 0.015;
+        [InputParameter("Slope Threshold (norm.)", 3, 0.0, 100, 0.01)]
+        public double _ThrSlope = 2;
 
         // HMA settings
         [InputParameter("HMA Settings", 10)]
         public readonly string _tagHMA = "#############";
         [InputParameter("Use Price for HMA", 11)]
         public bool _UsePrice = true;
-        [InputParameter("HMA Length", 12, 2, 200, 1)]
-        public int _HmaLen = 14;
+        [InputParameter("HMA Length (Composite)", 12, 2, 2000, 1)]
+        public int _HmaLenComposite = 14;
         [InputParameter("Use ATR-scaled HMA", 13)]
         public bool _UseAtrScaledHma = false;
+        [InputParameter("HMA Length (Pure)", 14, 2, 2000, 1)]
+        public int _HmaLenPure = 14;
 
         // ATR settings
         [InputParameter("ATR Settings", 20)]
         public readonly string _tagATR = "#############";
         [InputParameter("Use ATR Normalization", 21)]
         public bool _UseAtrNorm = true;
-        [InputParameter("ATR Length", 22, 2, 200, 1)]
+        [InputParameter("ATR Length", 22, 2, 2000, 1)]
         public int _AtrLen = 14;
 
         #endregion
@@ -89,7 +91,7 @@ namespace RovIndicator
             this.rvolShortBuf = new RingBuffer<double>(this._LenShort);
             this.rvolLongBuf = new RingBuffer<double>(this._LenLong);
             // Usa un buffer capiente per supportare HMA classica e scalata (fino a 200)
-            this.hullBuffer = new RingBuffer<double>(200);
+            this.hullBuffer = new RingBuffer<double>(Math.Max(this._HmaLenComposite, this._HmaLenComposite));
         }
 
         protected override void OnUpdate(UpdateArgs args)
@@ -116,36 +118,41 @@ namespace RovIndicator
 
                 var hullArray = hullBuffer.ToArray();
 
-                // Calcola la lunghezza HMA effettiva: fissa o scalata da ATR
+                // Calcola le due HMA separate: Composite (eventualmente ATR-scalata) e Pure (non scalata)
                 var atrForHma = this.atrInd?.GetValue(1) ?? 0.0;
-                int baseLen = Math.Max(2, _HmaLen);
-                int effLen = baseLen;
+                int baseLenComp = Math.Max(2, _HmaLenComposite);
+                int effLenComp = baseLenComp;
                 if (_UseAtrScaledHma)
                 {
                     double atrSafe = Math.Max(atrForHma, 1e-9);
-                    int scaled = (int)Math.Round(_HmaLen / atrSafe);
+                    int scaled = (int)Math.Round(_HmaLenComposite / atrSafe);
                     // clamp alla dimensione disponibile del buffer e range sensato
                     if (scaled < 2) scaled = 2;
                     if (scaled > 200) scaled = 200;
-                    effLen = Math.Min(scaled, hullArray.Length);
+                    effLenComp = Math.Min(scaled, hullArray.Length);
                 }
 
-                // Calcola HMA classica e scalata; scegli in base al parametro
-                var hmaClassic = TA.HMA_Last(hullArray, Math.Min(baseLen, hullArray.Length));
-                var hmaScaled = TA.HMA_Last(hullArray, effLen);
-                var chosenHma = _UseAtrScaledHma ? hmaScaled : hmaClassic;
-                var hmaUsed = double.IsNaN(chosenHma) ? hullArray.Average() : chosenHma;
+                // HMA per il composito RVOL (può essere scalata da ATR)
+                var hmaClassicComp = TA.HMA_Last(hullArray, Math.Min(baseLenComp, hullArray.Length));
+                var hmaScaledComp = TA.HMA_Last(hullArray, effLenComp);
+                var hmaComposite = _UseAtrScaledHma ? hmaScaledComp : hmaClassicComp;
+                var hmaCompositeUsed = double.IsNaN(hmaComposite) ? hullArray.Average() : hmaComposite;
+
+                // HMA "pura" per la linea di direzione (non scalata da ATR)
+                int baseLenPure = Math.Min(Math.Max(2, _HmaLenPure), hullArray.Length);
+                var hmaPure = TA.HMA_Last(hullArray, baseLenPure);
+                var hmaPureUsed = double.IsNaN(hmaPure) ? hullArray.Average() : hmaPure;
 
                 // Composite interno (non esposto): media tra RVOL S/L e HMA
-                this.currentsmoothedRvol = (currentRvolS + currentRvolL + hmaUsed) / 3.0;
+                this.currentsmoothedRvol = (currentRvolS + currentRvolL + hmaCompositeUsed) / 3.0;
 
                 // Segnale HMA: −2 se close < HMA, +2 se close > HMA, 0 altrimenti
                 int hmaDir = 0;
-                if (!double.IsNaN(hmaUsed))
+                if (!double.IsNaN(hmaPureUsed))
                 {
                     var close = this.HistoricalData[1][PriceType.Close];
-                    if (close > hmaUsed) hmaDir = 2;
-                    else if (close < hmaUsed) hmaDir = -2;
+                    if (close > hmaPureUsed) hmaDir = 2;
+                    else if (close < hmaPureUsed) hmaDir = -2;
                 }
                 SetValue(hmaDir, LINE_HMA_DIR);
             }
