@@ -175,7 +175,7 @@ namespace DivergentStrV0_1.Utils
                 finally { hdDay?.Dispose(); }
             }
 
-            // --- Target sessions (range PRECEDENTE) ---
+            // --- Target sessions (range PRECEDENTE) --- TODO : calcoliamo erroneamente i tp per sessioni passate durante la settimana 
             if (TargetSessions.Count > 0)
             {
                 var agg = (HistoryAggregationTime)currentHistoricalData.Aggregation;

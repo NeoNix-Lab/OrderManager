@@ -51,11 +51,12 @@ namespace DivergentStrV0_1
         private int _uiDeltaStrengthLookback = 30;
         private double _uiDeltaStrengthMult = 2.0;
 
-        //ðŸ“ TODO: [Questo Multiplier e inutile]
+        //?? TODO: [Questo Multiplier e inutile]
 
         private double _uiDeltaDivergenceMult = 1.0;
         private double _uiDeltaVDtVMult = 2.0;
         private int _uiVDtVLookback = 30;
+        private bool _uiForceVolumeReady = false;
         #endregion
 
         #region ====== Sessions ======
@@ -69,6 +70,7 @@ namespace DivergentStrV0_1
         private double _quantity = 1000.0;
         private double _minSlInTicks = 20.0;
         private double _maxSlInTicks = 500.0;
+        private double _minTpInTicks = 20.0;
         private double _maxTpInTicks = 1000.0;
         private bool _debugMode = false;
         private int _maxOpen = 3;
@@ -125,10 +127,17 @@ namespace DivergentStrV0_1
         public double Quantity => _quantity;
         public double MinSlInTicks => _minSlInTicks;
         public double MaxSlInTicks => _maxSlInTicks;
+        public double MinTpInTicks => _minTpInTicks;
         public double MaxTpInTicks => _maxTpInTicks;
         public bool DebugMode => Debug;
         public IReadOnlyList<SimpleSessionUtc> CustomSessions => _CustomSessions.AsReadOnly();
         public int CustomSessionsCount => _CustomSessionsCount;
+        public bool UseDefaultSessions
+        {
+            get => _UseDefaultSessions;
+            set => _UseDefaultSessions = value;
+        }
+
 
         private double procesPercent => hd?.VolumeAnalysisCalculationProgress?.ProgressPercent ?? 0.0;
         private bool volumesLoaded => hd?.VolumeAnalysisCalculationProgress?.ProgressPercent == 100;
@@ -151,6 +160,8 @@ namespace DivergentStrV0_1
         protected override void OnRun()
         {
             // UI parameters are initialized from their defaults or from Settings UI.
+
+            StrategyLogHub.Publish("DivergentStr", string.Format("OnRun entered | AppDomain: {0}", AppDomain.CurrentDomain.FriendlyName), LoggingLevel.System);
 
             // Indicators
             this.AtrIndicator = Core.Instance.Indicators.CreateIndicator(
@@ -176,7 +187,7 @@ namespace DivergentStrV0_1
             // Configure Delta Indicator
             this.DeltaIndicato.Settings = new List<SettingItem>
             {
-                new SettingItemBoolean("Force Volume Ready", true),
+                new SettingItemBoolean("Force Volume Ready", _uiForceVolumeReady),
                 new SettingItemBoolean("Delta: Use Median", _uiDeltaUseMedian),
                 new SettingItemInteger("Delta: Lookback", _uiDeltaLookback),
                 new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
@@ -211,6 +222,9 @@ namespace DivergentStrV0_1
                 {
                     foreach (var cs in _CustomSessions)
                         StaticSessionManager.AddSession(cs, Utils.SessionType.Trade);
+
+                    foreach (var sx in OffMarketUtc.Build())
+                        StaticSessionManager.AddSession(sx, Utils.SessionType.Target);
                 }
 
                 // Strategy init
@@ -246,11 +260,13 @@ namespace DivergentStrV0_1
                     (int)Math.Round(_minSlInTicks),
                     (int)Math.Round(_maxSlInTicks))
                 {
-                    MinTpInTicks = (int)Math.Max(1, Math.Round(_maxTpInTicks)),
+                    MinTpInTicks = (int)Math.Max(1, Math.Round(_minTpInTicks)),
+                    MaxTpInTicks = (int)Math.Max(Math.Max(1, Math.Round(_minTpInTicks)), Math.Max(1, Math.Round(_maxTpInTicks))),
                     AtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, _uiAtrSlippageMultiplier))
                 });
 
                 _strategy.Init(req, _Account, _inputDebugMode, "", false);
+                StrategyLogHub.Publish("DivergentStr", $"Strategy initialized | AppDomain: {AppDomain.CurrentDomain.FriendlyName} | UseDefaultSessions: {_UseDefaultSessions}", LoggingLevel.System);
                 _conditionable = _strategy;
             }
         }
@@ -273,7 +289,7 @@ namespace DivergentStrV0_1
             {
                 var settings = base.Settings;
 
-                #region ===== 100x â€” Sessions =====
+                #region ===== 100x — Sessions =====
                 settings.Add(new SettingItemBoolean(KEY_SESS, false)
                 {
                     Text = KEY_SESS,
@@ -289,11 +305,11 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_SESS, true)
                 });
 
-                settings.Add(new SettingItemBoolean(KEY_SESS_USEDEFAULT, false)
+                settings.Add(new SettingItemBoolean(KEY_SESS_USEDEFAULT, _UseDefaultSessions)
                 {
                     Text = KEY_SESS_USEDEFAULT,
                     SortIndex = 1000,
-                    Value = false
+                    Value = _UseDefaultSessions
                 });
 
                 for (int i = 0; i < 3; i++)
@@ -335,7 +351,7 @@ namespace DivergentStrV0_1
                 }
                 #endregion
 
-                #region ===== 300x â€” Strategy =====
+                #region ===== 300x — Strategy =====
                 settings.Add(new SettingItemBoolean(KEY_STRAT, _uiShowStrat)
                 {
                     Text = KEY_STRAT,
@@ -372,10 +388,20 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
 
-                settings.Add(new SettingItemDouble("Min Tp In Ticks", _maxTpInTicks)
+                settings.Add(new SettingItemDouble("Min Tp In Ticks", _minTpInTicks)
+                {
+                    Text = "Min TP In Ticks",
+                    SortIndex = 3005,
+                    Minimum = 1,
+                    Maximum = 50000,
+                    Increment = 1,
+                    Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
+                });
+
+                settings.Add(new SettingItemDouble("Max Tp In Ticks", _maxTpInTicks)
                 {
                     Text = "Max TP In Ticks",
-                    SortIndex = 3005,
+                    SortIndex = 3006,
                     Minimum = 1,
                     Maximum = 50000,
                     Increment = 1,
@@ -448,7 +474,7 @@ namespace DivergentStrV0_1
                 });
                 #endregion
 
-                #region ===== 320x â€” Entry Conditions =====
+                #region ===== 320x — Entry Conditions =====
                 settings.Add(new SettingItemBoolean("######## Entry Conditions ######", true)
                 {
                     Text = "######## Entry Conditions ######",
@@ -458,7 +484,7 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemInteger("Entry: Min Conditions", _entryMinConditions)
                 {
-                    Text = "Entry: Min Conditions â€” minimum true among selected",
+                    Text = "Entry: Min Conditions — minimum true among selected",
                     SortIndex = 3021,
                     Minimum = 0,
                     Maximum = 6,
@@ -467,48 +493,48 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemBoolean("Entry Use: RVOL", _entryUseRVOL)
                 {
-                    Text = "Entry Use: RVOL â€” Normalized RVOL momentum",
+                    Text = "Entry Use: RVOL — Normalized RVOL momentum",
                     SortIndex = 3022,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDPS", _entryUseVDPS)
                 {
-                    Text = "Entry Use: VDPS â€” Price/Delta Ratio (APAVD)",
+                    Text = "Entry Use: VDPS — Price/Delta Ratio (APAVD)",
                     SortIndex = 3023,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDstrong", _entryUseVDStrong)
                 {
-                    Text = "Entry Use: VDstrong â€” Delta Strength (|VD| vs avg |VD|)",
+                    Text = "Entry Use: VDstrong — Delta Strength (|VD| vs avg |VD|)",
                     SortIndex = 3024,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: HMA", _entryUseHMA)
                 {
-                    Text = "Entry Use: HMA â€” HMA Direction (Close vs HMA)",
+                    Text = "Entry Use: HMA — HMA Direction (Close vs HMA)",
                     SortIndex = 3025,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDtV", _entryUseVDtV)
                 {
-                    Text = "Entry Use: VDtV â€” Delta-to-Volume Ratio (|VD|/Volume)",
+                    Text = "Entry Use: VDtV — Delta-to-Volume Ratio (|VD|/Volume)",
                     SortIndex = 3026,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDP", _entryUseVDP)
                 {
-                    Text = "Entry Use: VDP â€” VD-Price Divergence",
+                    Text = "Entry Use: VDP — VD-Price Divergence",
                     SortIndex = 3027,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
                 #endregion
 
-                #region ===== 330x â€” Exit Conditions =====
+                #region ===== 330x — Exit Conditions =====
                 settings.Add(new SettingItemBoolean("######## Exit Conditions ######", true)
                 {
                     Text = "######## Exit Conditions ######",
@@ -518,7 +544,7 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemInteger("Exit: Min Conditions", _exitMinConditions)
                 {
-                    Text = "Exit: Min Conditions â€” minimum true among selected",
+                    Text = "Exit: Min Conditions — minimum true among selected",
                     SortIndex = 3031,
                     Minimum = 0,
                     Maximum = 6,
@@ -527,48 +553,48 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemBoolean("Exit Use: RVOL", _exitUseRVOL)
                 {
-                    Text = "Exit Use: RVOL â€” Normalized RVOL momentum",
+                    Text = "Exit Use: RVOL — Normalized RVOL momentum",
                     SortIndex = 3032,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDPS", _exitUseVDPS)
                 {
-                    Text = "Exit Use: VDPS â€” Price/Delta Ratio (APAVD)",
+                    Text = "Exit Use: VDPS — Price/Delta Ratio (APAVD)",
                     SortIndex = 3033,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDstrong", _exitUseVDStrong)
                 {
-                    Text = "Exit Use: VDstrong â€” Delta Strength (|VD| vs avg |VD|)",
+                    Text = "Exit Use: VDstrong — Delta Strength (|VD| vs avg |VD|)",
                     SortIndex = 3034,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: HMA", _exitUseHMA)
                 {
-                    Text = "Exit Use: HMA â€” HMA Direction (Close vs HMA)",
+                    Text = "Exit Use: HMA — HMA Direction (Close vs HMA)",
                     SortIndex = 3035,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDtV", _exitUseVDtV)
                 {
-                    Text = "Exit Use: VDtV â€” Delta-to-Volume Ratio (|VD|/Volume)",
+                    Text = "Exit Use: VDtV — Delta-to-Volume Ratio (|VD|/Volume)",
                     SortIndex = 3036,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDP", _exitUseVDP)
                 {
-                    Text = "Exit Use: VDP â€” VD-Price Divergence",
+                    Text = "Exit Use: VDP — VD-Price Divergence",
                     SortIndex = 3037,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
                 #endregion
 
-                #region ===== 400x â€” ATR =====
+                #region ===== 400x — ATR =====
                 settings.Add(new SettingItemBoolean(KEY_ATR, _uiShowAtr)
                 {
                     Text = KEY_ATR,
@@ -635,7 +661,7 @@ namespace DivergentStrV0_1
                 });
                 #endregion
 
-                #region ===== 500x â€” Delta =====
+                #region ===== 500x — Delta =====
                 settings.Add(new SettingItemBoolean(KEY_DELTA, _uiShowDelta)
                 {
                     Text = KEY_DELTA,
@@ -794,8 +820,11 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue("Max SL In Ticks", out double maxSl))
                         _maxSlInTicks = Math.Max(_minSlInTicks, maxSl);
 
+                    if (value.TryGetValue("Min Tp In Ticks", out double minTp))
+                        _minTpInTicks = Math.Max(1, minTp);
+
                     if (value.TryGetValue("Max Tp In Ticks", out double maxTp))
-                        _maxTpInTicks = Math.Max(1, maxTp);
+                        _maxTpInTicks = Math.Max(_minTpInTicks, Math.Max(1, maxTp));
 
                     if (value.TryGetValue("Max Open Positions", out int maxOpen))
                         _maxOpen = Math.Max(1, maxOpen);
@@ -896,6 +925,9 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue(KEY_DELTA, out bool showDelta))
                         _uiShowDelta = showDelta;
 
+                    if (value.TryGetValue("Force Volume Ready", out bool forceVolumeReady))
+                        _uiForceVolumeReady = forceVolumeReady;
+
                     if (value.TryGetValue("Delta: Use Median", out bool dMed))
                         _uiDeltaUseMedian = dMed;
 
@@ -976,3 +1008,8 @@ namespace DivergentStrV0_1
         #endregion
     }
 }
+
+
+
+
+

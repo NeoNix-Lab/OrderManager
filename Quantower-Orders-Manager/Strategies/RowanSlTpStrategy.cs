@@ -72,6 +72,9 @@ namespace DivergentStrV0_1.Strategies
 
         }
 
+        //📝 TODO: [Max tp manca]
+
+
         public List<double> CalculateTp(SlTpData marketData, Side side, double entry_price)
         {
             if (!StaticSessionManager.TpLevels.Levels.Any())

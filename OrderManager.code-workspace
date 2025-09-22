@@ -6,7 +6,7 @@
         }
     ],
     "settings": {
-        "files.exclude": {
+        "files.exclude": {      
             "**/bin": true,
             "**/obj": true,
             "**/.vs": true,
