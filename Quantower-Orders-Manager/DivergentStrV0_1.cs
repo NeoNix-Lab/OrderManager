@@ -51,7 +51,7 @@ namespace DivergentStrV0_1
         private int _uiDeltaStrengthLookback = 30;
         private double _uiDeltaStrengthMult = 2.0;
 
-        //?? TODO: [Questo Multiplier e inutile]
+        //?? TODO: [DEBUG] Validate Delta divergence multiplier impact
 
         private double _uiDeltaDivergenceMult = 1.0;
         private double _uiDeltaVDtVMult = 2.0;
@@ -76,10 +76,7 @@ namespace DivergentStrV0_1
         private int _maxOpen = 3;
         private double _maxSessionLossUsd = 100.0;
         private int _verbosityFrequency = 3;
-        private int _slippageAtrPeriod = 14;
-
-        // Entry / Exit conditions
-        private bool _entryUseRVOL = true;
+        private int _slippageAtrPeriod = 14;        private bool _entryUseRVOL = true;
         private bool _entryUseVDPS = true;
         private bool _entryUseVDStrong = true;
         private bool _entryUseHMA = true;
@@ -159,18 +156,14 @@ namespace DivergentStrV0_1
 
         protected override void OnRun()
         {
-            // UI parameters are initialized from their defaults or from Settings UI.
-
             StrategyLogHub.Publish("DivergentStr", string.Format("OnRun entered | AppDomain: {0}", AppDomain.CurrentDomain.FriendlyName), LoggingLevel.System);
-
-            // Indicators
+            //?? TODO: [DEBUG] Verify indicator catalog availability before creating instances.
             this.AtrIndicator = Core.Instance.Indicators.CreateIndicator(
                 Core.Instance.Indicators.All.FirstOrDefault(x => x.Name == "RVOL (evolved)"));
 
             this.DeltaIndicato = Core.Instance.Indicators.CreateIndicator(
                 Core.Instance.Indicators.All.FirstOrDefault(x => x.Name == "DeltaBasedIndicators"));
-
-            // Configure ATR Indicator
+            //?? TODO: [DEBUG] Confirm ATR indicator settings align with strategy thresholds.
             this.AtrIndicator.Settings = new List<SettingItem>
             {
                 new SettingItemInteger("Short Length", _uiRvolShortLen),
@@ -183,8 +176,7 @@ namespace DivergentStrV0_1
                 new SettingItemBoolean("Use ATR Normalization", _uiAtrNormalize),
                 new SettingItemDouble("Slope Threshold (norm.)", _uiAtrSlopeThr)
             };
-
-            // Configure Delta Indicator
+            //?? TODO: [DEBUG] Cross-check Delta indicator configuration against UI state.
             this.DeltaIndicato.Settings = new List<SettingItem>
             {
                 new SettingItemBoolean("Force Volume Ready", _uiForceVolumeReady),
@@ -197,8 +189,7 @@ namespace DivergentStrV0_1
                 new SettingItemInteger("VDtV Lookback", _uiVDtVLookback),
                 new SettingItemDouble("VDtV Threshold Multiplier", _uiDeltaVDtVMult)
             };
-
-            // History request
+            //?? TODO: [DEBUG] Validate history request parameters before strategy initialization.
             if (!_conditionable.Initialized)
             {
                 var req = new HistoryRequestParameters
@@ -208,8 +199,7 @@ namespace DivergentStrV0_1
                     ToTime = default,
                     Symbol = _Symbol
                 };
-
-                // Sessions
+                //?? TODO: [DEBUG] Monitor session registration to avoid duplicated windows.
                 if (_UseDefaultSessions || _CustomSessionsCount == 0 || _CustomSessions.Count == 0)
                 {
                     foreach (var s in OffMarketUtc.Build())
@@ -226,8 +216,7 @@ namespace DivergentStrV0_1
                     foreach (var sx in OffMarketUtc.Build())
                         StaticSessionManager.AddSession(sx, Utils.SessionType.Target);
                 }
-
-                // Strategy init
+                //?? TODO: [DEBUG] Ensure RowanStrategy dependencies are resolved prior to construction.
                 _strategy = new RowanStrategy(
                     this.DeltaIndicato,
                     this.AtrIndicator,
@@ -236,8 +225,7 @@ namespace DivergentStrV0_1
                     _maxSessionLossUsd,
                     _verbosityFrequency,
                     Math.Max(1, _slippageAtrPeriod));
-
-                // Configure entry / exit conditions
+                //?? TODO: [DEBUG] Review entry/exit signal mappings whenever UI flags change.
                 var entryLineNames = new List<string>();
                 if (_entryUseRVOL) entryLineNames.Add("RvolSignal");
                 if (_entryUseHMA) entryLineNames.Add("HMA_Direction");
@@ -274,13 +262,14 @@ namespace DivergentStrV0_1
         protected override void OnStop()
         {
             readyToGo = false;
+            //?? TODO: [DEBUG] Verify disposal pipeline releases indicator references.
             StaticSessionManager.Dispose();
             _conditionable?.Dispose();
         }
 
         protected override void OnRemove()
         {
-            // Cleanup if needed
+            //?? TODO: [DEBUG] Explicitly release remaining resources when removing the strategy.
         }
 
         public override IList<SettingItem> Settings
@@ -1013,6 +1002,15 @@ namespace DivergentStrV0_1
         #endregion
     }
 }
+
+
+
+
+
+
+
+
+
 
 
 
