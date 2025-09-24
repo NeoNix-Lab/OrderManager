@@ -1,23 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using DivergentStrV0_1.Utils;
 using TradingPlatform.BusinessLayer;
 
 namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 {
     public enum ManagerType
     {
-        OrdersHistoryBased, // ManagerDue (TpSlItems2)
-        LegacyOrdersBased,  // TpSlManager (SlTpItems)
-        PositionBased       // TpSlPositionManager (TpSlItemPosition)
+        PositionBased
     }
 
     public interface IManagerFacade : IDisposable
     {
         IReadOnlyList<ITpSlItems> Items { get; }
         IReadOnlyList<ITpSlItems> ClosedItems { get; }
-        public double ExposedAmmount { get; }
+        double ExposedAmmount { get; }
         int TradeCount { get; }
 
         void PlaceEntryOrder(PlaceOrderRequestParameters req, string comment,
@@ -25,58 +22,6 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 
         void UpdateSl(ITpSlItems item, Func<double, double> updateFunction);
         void UpdateTp(ITpSlItems item, Func<double, double> updateFunction);
-    }
-
-    internal sealed class ManagerDueFacade : IManagerFacade
-    {
-        private readonly Utils.ManagerDue _inner;
-        public ManagerDueFacade(Utils.ManagerDue inner)
-        {
-            _inner = inner;
-        }
-
-        public IReadOnlyList<ITpSlItems> Items => _inner.Items.Cast<ITpSlItems>().ToList();
-        public IReadOnlyList<ITpSlItems> ClosedItems => _inner.ClosedItems.Cast<ITpSlItems>().ToList();
-        public int TradeCount => _inner.TradeCount;
-
-        public double ExposedAmmount => _inner.ExposedAmmount;
-
-        public void PlaceEntryOrder(PlaceOrderRequestParameters req, string comment, List<PlaceOrderRequestParameters> sl, List<PlaceOrderRequestParameters> tp, object sender = null)
-            => _inner.PlaceEntryOrder(req, comment, sl, tp, sender);
-
-        public void UpdateSl(ITpSlItems item, Func<double, double> updateFunction)
-            => _inner.UpdateSl((TpSlItems2)item, updateFunction);
-
-        public void UpdateTp(ITpSlItems item, Func<double, double> updateFunction)
-            => _inner.UpdateTp((TpSlItems2)item, updateFunction);
-
-        public void Dispose() => _inner.Dispose();
-    }
-
-    internal sealed class TpSlManagerFacade : IManagerFacade
-    {
-        private readonly OperationSystemAdv.TpSlManager _inner;
-        public TpSlManagerFacade(OperationSystemAdv.TpSlManager inner)
-        {
-            _inner = inner;
-        }
-
-        public IReadOnlyList<ITpSlItems> Items => _inner.Items.Cast<ITpSlItems>().ToList();
-        public IReadOnlyList<ITpSlItems> ClosedItems => _inner.ClosedItems.Cast<ITpSlItems>().ToList();
-        public double ExposedAmmount => _inner.ExposedAmmount;
-
-        public int TradeCount => _inner.TradeCount;
-
-        public void PlaceEntryOrder(PlaceOrderRequestParameters req, string comment, List<PlaceOrderRequestParameters> sl, List<PlaceOrderRequestParameters> tp, object sender = null)
-            => _inner.PlaceEntryOrder(req, comment, sl, tp, sender);
-
-        public void UpdateSl(ITpSlItems item, Func<double, double> updateFunction)
-            => _inner.UpdateSl((SlTpItems)item, updateFunction);
-
-        public void UpdateTp(ITpSlItems item, Func<double, double> updateFunction)
-            => _inner.UpdateTp((SlTpItems)item, updateFunction);
-
-        public void Dispose() => _inner.Dispose();
     }
 
     internal sealed class PositionManagerFacade : IManagerFacade
@@ -88,7 +33,6 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
         }
 
         public double ExposedAmmount => _inner.ExposedAmmount;
-
         public IReadOnlyList<ITpSlItems> Items => _inner.Items.Cast<ITpSlItems>().ToList();
         public IReadOnlyList<ITpSlItems> ClosedItems => _inner.ClosedItems.Cast<ITpSlItems>().ToList();
         public int TradeCount => _inner.TradeCount;
@@ -107,25 +51,11 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 
     public static class ManagerFacadeFactory
     {
-        private static readonly DateTime __anchorUtc = new DateTime(2025, 9, 15, 0, 0, 0, DateTimeKind.Utc);
-        static ManagerFacadeFactory()
-        {
-            //try
-            //{
-            //    if (DateTime.UtcNow > __anchorUtc.AddDays(7))
-            //        throw new InvalidOperationException("Strategy build expired. Contact maintainer.");
-            //}
-            //catch
-            //{
-            //    throw;
-            //}
-        }
-
         public static IManagerFacade Create(ManagerType type)
         {
-            // Slim-down: always use the position-based manager to avoid duplicated pipelines
             if (type != ManagerType.PositionBased)
-                global::DivergentStrV0_1.Utils.AppLog.System("Managers", $"Requested {type}, using PositionBased for slim-down.");
+                global::DivergentStrV0_1.Utils.AppLog.System("Managers", $"Requested {type}, using PositionBased manager.");
+
             return new PositionManagerFacade(new TpSlPositionManager());
         }
     }
