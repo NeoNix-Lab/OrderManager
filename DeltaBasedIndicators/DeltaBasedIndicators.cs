@@ -24,7 +24,7 @@ namespace DeltaBasedIndicators
 		[InputParameter("Delta: Use Median", 1)]
 		public bool _Use_Median = false;
 
-		[InputParameter("Delta: Threshold Multiplier", 2)]
+		[InputParameter("Delta: Threshold Multiplier", 2, 0.1, 20.0, 0.1)]
 		public double _Trh= 2;
 
 		[InputParameter("Delta: Lookback", 3)]
@@ -37,14 +37,14 @@ namespace DeltaBasedIndicators
 		[InputParameter("Delta Strength: Lookback", 11)]
 		public int _LoockBackWindow_Strength = 30;
 
-		[InputParameter("Delta Strength: Threshold Multiplier", 12)]
+		[InputParameter("Delta Strength: Threshold Multiplier", 12, 0.1, 20.0, 0.1)]
 		public double _Trh_Strenght = 2;
 
 		// VD Divergence settings
 		[InputParameter("VD Divergence Settings", 20)]
 		public readonly string _tag__tre = "#############";
 
-		[InputParameter("VD Divergence: Threshold Multiplier", 21)]
+		[InputParameter("VD Divergence: Threshold Multiplier", 21, 0.1, 20.0, 0.1)]
 		public double _Trh_Divergence = 1.0;
 
 		// VD/Volume settings
@@ -54,7 +54,7 @@ namespace DeltaBasedIndicators
 		[InputParameter("VDtV Lookback", 31)]
 		public int _LoockBackWindow_VDtV = 30;
 
-		[InputParameter("VDtV Threshold Multiplier", 32)]
+		[InputParameter("VDtV Threshold Multiplier", 32, 0.1, 20.0, 0.1)]
 		public double _Trh_VDtV = 2;
 
         [InputParameter("Force Volume Ready", 33)]
@@ -249,4 +249,5 @@ namespace DeltaBasedIndicators
 		}
 	}
 }
+
 

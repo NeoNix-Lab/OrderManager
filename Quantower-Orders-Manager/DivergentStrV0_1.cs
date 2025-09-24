@@ -289,7 +289,7 @@ namespace DivergentStrV0_1
             {
                 var settings = base.Settings;
 
-                #region ===== 100x — Sessions =====
+                #region ===== 100x ï¿½ Sessions =====
                 settings.Add(new SettingItemBoolean(KEY_SESS, false)
                 {
                     Text = KEY_SESS,
@@ -351,7 +351,7 @@ namespace DivergentStrV0_1
                 }
                 #endregion
 
-                #region ===== 300x — Strategy =====
+                #region ===== 300x ï¿½ Strategy =====
                 settings.Add(new SettingItemBoolean(KEY_STRAT, _uiShowStrat)
                 {
                     Text = KEY_STRAT,
@@ -474,7 +474,7 @@ namespace DivergentStrV0_1
                 });
                 #endregion
 
-                #region ===== 320x — Entry Conditions =====
+                #region ===== 320x ï¿½ Entry Conditions =====
                 settings.Add(new SettingItemBoolean("######## Entry Conditions ######", true)
                 {
                     Text = "######## Entry Conditions ######",
@@ -484,7 +484,7 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemInteger("Entry: Min Conditions", _entryMinConditions)
                 {
-                    Text = "Entry: Min Conditions — minimum true among selected",
+                    Text = "Entry: Min Conditions ï¿½ minimum true among selected",
                     SortIndex = 3021,
                     Minimum = 0,
                     Maximum = 6,
@@ -493,48 +493,48 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemBoolean("Entry Use: RVOL", _entryUseRVOL)
                 {
-                    Text = "Entry Use: RVOL — Normalized RVOL momentum",
+                    Text = "Entry Use: RVOL ï¿½ Normalized RVOL momentum",
                     SortIndex = 3022,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDPS", _entryUseVDPS)
                 {
-                    Text = "Entry Use: VDPS — Price/Delta Ratio (APAVD)",
+                    Text = "Entry Use: VDPS ï¿½ Price/Delta Ratio (APAVD)",
                     SortIndex = 3023,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDstrong", _entryUseVDStrong)
                 {
-                    Text = "Entry Use: VDstrong — Delta Strength (|VD| vs avg |VD|)",
+                    Text = "Entry Use: VDstrong ï¿½ Delta Strength (|VD| vs avg |VD|)",
                     SortIndex = 3024,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: HMA", _entryUseHMA)
                 {
-                    Text = "Entry Use: HMA — HMA Direction (Close vs HMA)",
+                    Text = "Entry Use: HMA ï¿½ HMA Direction (Close vs HMA)",
                     SortIndex = 3025,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDtV", _entryUseVDtV)
                 {
-                    Text = "Entry Use: VDtV — Delta-to-Volume Ratio (|VD|/Volume)",
+                    Text = "Entry Use: VDtV ï¿½ Delta-to-Volume Ratio (|VD|/Volume)",
                     SortIndex = 3026,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Entry Use: VDP", _entryUseVDP)
                 {
-                    Text = "Entry Use: VDP — VD-Price Divergence",
+                    Text = "Entry Use: VDP ï¿½ VD-Price Divergence",
                     SortIndex = 3027,
                     Relation = new SettingItemRelationVisibility("######## Entry Conditions ######", true)
                 });
                 #endregion
 
-                #region ===== 330x — Exit Conditions =====
+                #region ===== 330x ï¿½ Exit Conditions =====
                 settings.Add(new SettingItemBoolean("######## Exit Conditions ######", true)
                 {
                     Text = "######## Exit Conditions ######",
@@ -544,7 +544,7 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemInteger("Exit: Min Conditions", _exitMinConditions)
                 {
-                    Text = "Exit: Min Conditions — minimum true among selected",
+                    Text = "Exit: Min Conditions ï¿½ minimum true among selected",
                     SortIndex = 3031,
                     Minimum = 0,
                     Maximum = 6,
@@ -553,48 +553,48 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemBoolean("Exit Use: RVOL", _exitUseRVOL)
                 {
-                    Text = "Exit Use: RVOL — Normalized RVOL momentum",
+                    Text = "Exit Use: RVOL ï¿½ Normalized RVOL momentum",
                     SortIndex = 3032,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDPS", _exitUseVDPS)
                 {
-                    Text = "Exit Use: VDPS — Price/Delta Ratio (APAVD)",
+                    Text = "Exit Use: VDPS ï¿½ Price/Delta Ratio (APAVD)",
                     SortIndex = 3033,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDstrong", _exitUseVDStrong)
                 {
-                    Text = "Exit Use: VDstrong — Delta Strength (|VD| vs avg |VD|)",
+                    Text = "Exit Use: VDstrong ï¿½ Delta Strength (|VD| vs avg |VD|)",
                     SortIndex = 3034,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: HMA", _exitUseHMA)
                 {
-                    Text = "Exit Use: HMA — HMA Direction (Close vs HMA)",
+                    Text = "Exit Use: HMA ï¿½ HMA Direction (Close vs HMA)",
                     SortIndex = 3035,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDtV", _exitUseVDtV)
                 {
-                    Text = "Exit Use: VDtV — Delta-to-Volume Ratio (|VD|/Volume)",
+                    Text = "Exit Use: VDtV ï¿½ Delta-to-Volume Ratio (|VD|/Volume)",
                     SortIndex = 3036,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDP", _exitUseVDP)
                 {
-                    Text = "Exit Use: VDP — VD-Price Divergence",
+                    Text = "Exit Use: VDP ï¿½ VD-Price Divergence",
                     SortIndex = 3037,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
                 #endregion
 
-                #region ===== 400x — ATR =====
+                #region ===== 400x ï¿½ ATR =====
                 settings.Add(new SettingItemBoolean(KEY_ATR, _uiShowAtr)
                 {
                     Text = KEY_ATR,
@@ -649,7 +649,8 @@ namespace DivergentStrV0_1
                     SortIndex = 4006,
                     Minimum = 0.0,
                     Maximum = 1.0,
-                    Increment = 0.001,
+                    DecimalPlaces = 1,
+                    Increment = 0.1,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
@@ -661,7 +662,7 @@ namespace DivergentStrV0_1
                 });
                 #endregion
 
-                #region ===== 500x — Delta =====
+                #region ===== 500x ï¿½ Delta =====
                 settings.Add(new SettingItemBoolean(KEY_DELTA, _uiShowDelta)
                 {
                     Text = KEY_DELTA,
@@ -691,6 +692,7 @@ namespace DivergentStrV0_1
                     Minimum = 0.1,
                     Maximum = 20.0,
                     Increment = 0.1,
+                    DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
@@ -710,6 +712,7 @@ namespace DivergentStrV0_1
                     Minimum = 0.1,
                     Maximum = 20.0,
                     Increment = 0.1,
+                    DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
@@ -720,6 +723,7 @@ namespace DivergentStrV0_1
                     Minimum = 0.1,
                     Maximum = 20.0,
                     Increment = 0.1,
+                    DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
@@ -730,6 +734,7 @@ namespace DivergentStrV0_1
                     Minimum = 0.1,
                     Maximum = 20.0,
                     Increment = 0.1,
+                    DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
