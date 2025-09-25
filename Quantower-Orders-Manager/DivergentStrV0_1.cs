@@ -963,17 +963,17 @@ namespace DivergentStrV0_1
                         _exitUseVDP = xVDP;
 
                     // ===== ATR =====
-                    if (value.TryGetValue("ATR Length", out int atrLen))
+                    if (value.TryGetValue(nameof(_uiAtrLen), out int atrLen))
                         _uiAtrLen = atrLen;
 
-                    if (value.TryGetValue("Use Price for HMA", out bool hmaUsePrice))
+                    if (value.TryGetValue(nameof(_uiHmaUsePrice), out bool hmaUsePrice))
                         _uiHmaUsePrice = hmaUsePrice;
 
                     // New separate HMA lengths
-                    if (value.TryGetValue("HMA Length (Composite)", out int hmaLenComp))
+                    if (value.TryGetValue(nameof(_uiHmaLenComposite), out int hmaLenComp))
                         _uiHmaLenComposite = Math.Max(2, Math.Min(200, hmaLenComp));
 
-                    if (value.TryGetValue("HMA Length (Pure)", out int hmaLenPure))
+                    if (value.TryGetValue(nameof(_uiHmaLenPure), out int hmaLenPure))
                         _uiHmaLenPure = Math.Max(2, Math.Min(200, hmaLenPure));
 
                     // Backward compatibility: if old key exists, apply to both
@@ -983,13 +983,13 @@ namespace DivergentStrV0_1
                         _uiHmaLenPure = Math.Max(2, Math.Min(200, hmaLenOld));
                     }
 
-                    if (value.TryGetValue("Use ATR Normalization", out bool atrNorm))
+                    if (value.TryGetValue(nameof(_uiAtrNormalize), out bool atrNorm))
                         _uiAtrNormalize = atrNorm;
 
-                    if (value.TryGetValue("Slope Threshold (norm.)", out double atrThr))
+                    if (value.TryGetValue(nameof(_uiAtrSlopeThr), out double atrThr))
                         _uiAtrSlopeThr = atrThr;
 
-                    if (value.TryGetValue("Use ATR-scaled HMA", out bool useAtrScaledHma))
+                    if (value.TryGetValue(nameof(_uiUseAtrScaledHma), out bool useAtrScaledHma))
                         _uiUseAtrScaledHma = useAtrScaledHma;
 
                     if (value.TryGetValue("ATR Slippage Multiplier", out double atrSlip))
@@ -1002,28 +1002,28 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue("Force Volume Ready", out bool forceVolumeReady))
                         _uiForceVolumeReady = forceVolumeReady;
 
-                    if (value.TryGetValue("Delta: Use Median", out bool dMed))
+                    if (value.TryGetValue(nameof(_uiDeltaUseMedian), out bool dMed))
                         _uiDeltaUseMedian = dMed;
 
-                    if (value.TryGetValue("Delta: Lookback", out int dLb))
+                    if (value.TryGetValue(nameof(_uiDeltaLookback), out int dLb))
                         _uiDeltaLookback = Math.Max(5, Math.Min(1000, dLb));
 
-                    if (value.TryGetValue("Delta: Threshold Multiplier", out double dTh))
+                    if (value.TryGetValue(nameof(_uiDeltaThresholdMult), out double dTh))
                         _uiDeltaThresholdMult = dTh;
 
-                    if (value.TryGetValue("Delta Strength: Lookback", out int dSLb))
+                    if (value.TryGetValue(nameof(_uiDeltaStrengthLookback), out int dSLb))
                         _uiDeltaStrengthLookback = Math.Max(5, Math.Min(1000, dSLb));
 
-                    if (value.TryGetValue("Delta Strength: Threshold Multiplier", out double dSTh))
+                    if (value.TryGetValue(nameof(_uiDeltaStrengthMult), out double dSTh))
                         _uiDeltaStrengthMult = dSTh;
 
-                    if (value.TryGetValue("VD Divergence: Threshold Multiplier", out double dDivTh))
+                    if (value.TryGetValue(nameof(_uiDeltaDivergenceMult), out double dDivTh))
                         _uiDeltaDivergenceMult = dDivTh;
 
-                    if (value.TryGetValue("VDtV Threshold Multiplier", out double vdtvTh))
+                    if (value.TryGetValue(nameof(_uiDeltaVDtVMult), out double vdtvTh))
                         _uiDeltaVDtVMult = vdtvTh;
 
-                    if (value.TryGetValue("VDtV Lookback", out int vdtvLb))
+                    if (value.TryGetValue(nameof(_uiVDtVLookback), out int vdtvLb))
                         _uiVDtVLookback = Math.Max(5, Math.Min(1000, vdtvLb));
                 }
                 catch (Exception ex)
