@@ -272,6 +272,103 @@ namespace DivergentStrV0_1
             //TODO: [DEBUG] Explicitly release remaining resources when removing the strategy.
         }
 
+        protected override void OnSettingsUpdated()
+        {
+            base.OnSettingsUpdated();
+
+            try
+            {
+                // 1) Aggiorna ATR indicator
+                if (this.AtrIndicator != null)
+                {
+                    this.AtrIndicator.Settings = new List<SettingItem>
+                    {
+                        new SettingItemInteger("Short Length", _uiRvolShortLen),
+                        new SettingItemInteger("Long Length", _uiRvolLongLen),
+                        new SettingItemBoolean("Use Price for HMA", _uiHmaUsePrice),
+                        new SettingItemInteger("HMA Length (Composite)", _uiHmaLenComposite),
+                        new SettingItemInteger("HMA Length (Pure)", _uiHmaLenPure),
+                        new SettingItemBoolean("Use ATR-scaled HMA", _uiUseAtrScaledHma),
+                        new SettingItemInteger("ATR Length", _uiAtrLen),
+                        new SettingItemBoolean("Use ATR Normalization", _uiAtrNormalize),
+                        new SettingItemDouble("Slope Threshold (norm.)", _uiAtrSlopeThr)
+                    };
+                }
+
+                // 2) Aggiorna Delta indicator
+                if (this.DeltaIndicato != null)
+                {
+                    this.DeltaIndicato.Settings = new List<SettingItem>
+                    {
+                        new SettingItemBoolean("Force Volume Ready", _uiForceVolumeReady),
+                        new SettingItemBoolean("Delta: Use Median", _uiDeltaUseMedian),
+                        new SettingItemInteger("Delta: Lookback", _uiDeltaLookback),
+                        new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
+                        new SettingItemInteger("Delta Strength: Lookback", _uiDeltaStrengthLookback),
+                        new SettingItemDouble("Delta Strength: Threshold Multiplier", _uiDeltaStrengthMult),
+                        new SettingItemDouble("VD Divergence: Threshold Multiplier", _uiDeltaDivergenceMult),
+                        new SettingItemInteger("VDtV Lookback", _uiVDtVLookback),
+                        new SettingItemDouble("VDtV Threshold Multiplier", _uiDeltaVDtVMult)
+                    };
+                }
+
+                // 3) Aggiorna mapping condizioni della strategy interna
+                if (this._strategy != null)
+                {
+                    var entry = new List<string>();
+                    if (_entryUseRVOL) entry.Add("RvolSignal");
+                    if (_entryUseHMA) entry.Add("HMA_Direction");
+                    if (_entryUseVDPS) entry.Add("APAVD_Flag");
+                    if (_entryUseVDStrong) entry.Add("VD_Strength_Flag");
+                    if (_entryUseVDtV) entry.Add("VD_to_Volume_Flag");
+                    if (_entryUseVDP) entry.Add("VD_Price_Divergent_Flag");
+
+                    var exit = new List<string>();
+                    if (_exitUseRVOL) exit.Add("RvolSignal");
+                    if (_exitUseHMA) exit.Add("HMA_Direction");
+                    if (_exitUseVDPS) exit.Add("APAVD_Flag");
+                    if (_exitUseVDStrong) exit.Add("VD_Strength_Flag");
+                    if (_exitUseVDtV) exit.Add("VD_to_Volume_Flag");
+                    if (_exitUseVDP) exit.Add("VD_Price_Divergent_Flag");
+
+                    _strategy.ConfigureConditions(entry, _entryMinConditions, exit, _exitMinConditions);
+
+                    // aggiorna anche gli SL/TP se cambiano
+                    _strategy.InjectStrategy(new RowanSlTpStrategy(
+                        (int)Math.Round(_minSlInTicks),
+                        (int)Math.Round(_maxSlInTicks))
+                    {
+                        MinTpInTicks = (int)Math.Max(1, Math.Round(_minTpInTicks)),
+                        MaxTpInTicks = (int)Math.Max(Math.Max(1, Math.Round(_minTpInTicks)), Math.Max(1, Math.Round(_maxTpInTicks))),
+                        AtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, _uiAtrSlippageMultiplier))
+                    });
+
+                }
+
+                // 4) Risincronizza le sessioni se cambiate
+                StaticSessionManager.Dispose();
+                if (_UseDefaultSessions || _CustomSessionsCount == 0 || _CustomSessions.Count == 0)
+                {
+                    foreach (var s in OffMarketUtc.Build())
+                        StaticSessionManager.AddSession(s, Utils.SessionType.Target);
+                    foreach (var sv in InMarketUtc.Build())
+                        StaticSessionManager.AddSession(sv, Utils.SessionType.Trade);
+                }
+                else
+                {
+                    foreach (var cs in _CustomSessions)
+                        StaticSessionManager.AddSession(cs, Utils.SessionType.Trade);
+                    foreach (var sx in OffMarketUtc.Build())
+                        StaticSessionManager.AddSession(sx, Utils.SessionType.Target);
+                }
+            }
+            catch (Exception ex)
+            {
+                Core.Instance.Loggers.Log($"OnSettingsUpdated error: {ex.Message}", LoggingLevel.Error);
+            }
+        }
+
+
         public override IList<SettingItem> Settings
         {
             get
@@ -362,7 +459,7 @@ namespace DivergentStrV0_1
                     Text = "Min SL In Ticks",
                     SortIndex = 3003,
                     Minimum = 1,
-                    Maximum = 15000,
+                    Maximum = double.MaxValue,
                     Increment = 1,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
@@ -372,7 +469,7 @@ namespace DivergentStrV0_1
                     Text = "Max SL In Ticks",
                     SortIndex = 3004,
                     Minimum = 1,
-                    Maximum = 50000,
+                    Maximum = double.MaxValue,
                     Increment = 1,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
@@ -382,7 +479,7 @@ namespace DivergentStrV0_1
                     Text = "Min TP In Ticks",
                     SortIndex = 3005,
                     Minimum = 1,
-                    Maximum = 50000,
+                    Maximum = double.MaxValue,
                     Increment = 1,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
@@ -392,7 +489,7 @@ namespace DivergentStrV0_1
                     Text = "Max TP In Ticks",
                     SortIndex = 3006,
                     Minimum = 1,
-                    Maximum = 50000,
+                    Maximum = double.MaxValue,
                     Increment = 1,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
@@ -406,30 +503,12 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
 
-                settings.Add(new SettingItemInteger("Min Trade Signal", _entryMinConditions)
-                {
-                    Text = "Min Trade Signal",
-                    SortIndex = 3007,
-                    Minimum = 0,
-                    Maximum = 100,
-                    Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
-                });
-
-                settings.Add(new SettingItemInteger("Min Close Signal", _exitMinConditions)
-                {
-                    Text = "Min Close Signal",
-                    SortIndex = 3008,
-                    Minimum = 0,
-                    Maximum = 100,
-                    Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
-                });
-
                 settings.Add(new SettingItemDouble("Max Session Loss USD", _maxSessionLossUsd)
                 {
                     Text = "Max Session Loss USD",
                     SortIndex = 3009,
-                    Minimum = -1000000,
-                    Maximum = 1000000,
+                    Minimum = 1,
+                    Maximum = double.MaxValue,
                     Increment = 0.01,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
@@ -448,7 +527,7 @@ namespace DivergentStrV0_1
                     Text = "Slippage ATR Period",
                     SortIndex = 3011,
                     Minimum = 1,
-                    Maximum = 1000,
+                    Maximum = int.MaxValue,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
 
@@ -458,6 +537,7 @@ namespace DivergentStrV0_1
                     SortIndex = 3012,
                     Minimum = 0.0,
                     Maximum = 2.0,
+                    DecimalPlaces = 2,
                     Increment = 0.01,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
@@ -473,7 +553,7 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemInteger("Entry: Min Conditions", _entryMinConditions)
                 {
-                    Text = "Entry: Min Conditions ï¿½ minimum true among selected",
+                    Text = "Entry: Min Trade Signal",
                     SortIndex = 3021,
                     Minimum = 0,
                     Maximum = 6,
@@ -533,7 +613,7 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemInteger("Exit: Min Conditions", _exitMinConditions)
                 {
-                    Text = "Exit: Min Conditions ï¿½ minimum true among selected",
+                    Text = "Exit: Min Close Signal",
                     SortIndex = 3031,
                     Minimum = 0,
                     Maximum = 6,
@@ -542,28 +622,28 @@ namespace DivergentStrV0_1
 
                 settings.Add(new SettingItemBoolean("Exit Use: RVOL", _exitUseRVOL)
                 {
-                    Text = "Exit Use: RVOL ï¿½ Normalized RVOL momentum",
+                    Text = "Exit Use: RVOL Normalized RVOL momentum",
                     SortIndex = 3032,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDPS", _exitUseVDPS)
                 {
-                    Text = "Exit Use: VDPS ï¿½ Price/Delta Ratio (APAVD)",
+                    Text = "Exit Use: VDPS Price/Delta Ratio (APAVD)",
                     SortIndex = 3033,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: VDstrong", _exitUseVDStrong)
                 {
-                    Text = "Exit Use: VDstrong ï¿½ Delta Strength (|VD| vs avg |VD|)",
+                    Text = "Exit Use: VDstrong Delta Strength (|VD| vs avg |VD|)",
                     SortIndex = 3034,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
 
                 settings.Add(new SettingItemBoolean("Exit Use: HMA", _exitUseHMA)
                 {
-                    Text = "Exit Use: HMA ï¿½ HMA Direction (Close vs HMA)",
+                    Text = "Exit Use: HMA Direction (Close vs HMA)",
                     SortIndex = 3035,
                     Relation = new SettingItemRelationVisibility("######## Exit Conditions ######", true)
                 });
@@ -595,7 +675,7 @@ namespace DivergentStrV0_1
                     Text = "ATR Length",
                     SortIndex = 4001,
                     Minimum = 2,
-                    Maximum = 200,
+                    Maximum = int.MaxValue,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
@@ -612,7 +692,7 @@ namespace DivergentStrV0_1
                     Text = "HMA Length (Composite)",
                     SortIndex = 4003,
                     Minimum = 2,
-                    Maximum = 200,
+                    Maximum = int.MaxValue,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
@@ -621,7 +701,7 @@ namespace DivergentStrV0_1
                     Text = "HMA Length (Pure)",
                     SortIndex = 4004,
                     Minimum = 2,
-                    Maximum = 200,
+                    Maximum = int.MaxValue,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
@@ -637,7 +717,7 @@ namespace DivergentStrV0_1
                     Text = "Slope Threshold (norm.)",
                     SortIndex = 4006,
                     Minimum = 0.0,
-                    Maximum = 1.0,
+                    Maximum = double.MaxValue,
                     DecimalPlaces = 1,
                     Increment = 0.1,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
@@ -670,7 +750,7 @@ namespace DivergentStrV0_1
                     Text = "Delta: Lookback",
                     SortIndex = 5002,
                     Minimum = 5,
-                    Maximum = 1000,
+                    Maximum = int.MaxValue,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
@@ -679,7 +759,7 @@ namespace DivergentStrV0_1
                     Text = "Delta: Threshold Multiplier",
                     SortIndex = 5003,
                     Minimum = 0.1,
-                    Maximum = 20.0,
+                    Maximum = double.MaxValue,
                     Increment = 0.1,
                     DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
@@ -690,7 +770,7 @@ namespace DivergentStrV0_1
                     Text = "Delta Strength: Lookback",
                     SortIndex = 5004,
                     Minimum = 5,
-                    Maximum = 1000,
+                    Maximum = int.MaxValue,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
 
@@ -699,7 +779,7 @@ namespace DivergentStrV0_1
                     Text = "Delta Strength: Threshold Multiplier",
                     SortIndex = 5005,
                     Minimum = 0.1,
-                    Maximum = 20.0,
+                    Maximum = double.MaxValue,
                     Increment = 0.1,
                     DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
@@ -710,7 +790,7 @@ namespace DivergentStrV0_1
                     Text = "VD Divergence: Threshold Multiplier",
                     SortIndex = 5006,
                     Minimum = 0.1,
-                    Maximum = 20.0,
+                    Maximum = double.MaxValue,
                     Increment = 0.1,
                     DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
@@ -721,7 +801,7 @@ namespace DivergentStrV0_1
                     Text = "VDtV Threshold Multiplier",
                     SortIndex = 5007,
                     Minimum = 0.1,
-                    Maximum = 20.0,
+                    Maximum = double.MaxValue,
                     Increment = 0.1,
                     DecimalPlaces = 1,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
@@ -732,7 +812,7 @@ namespace DivergentStrV0_1
                     Text = "VDtV Lookback",
                     SortIndex = 5008,
                     Minimum = 5,
-                    Maximum = 1000,
+                    Maximum = int.MaxValue,
                     Relation = new SettingItemRelationVisibility(KEY_DELTA, true)
                 });
                 #endregion
@@ -958,6 +1038,8 @@ namespace DivergentStrV0_1
             }
 
         }
+
+
 
 
         protected override void OnInitializeMetrics(Meter meter)
