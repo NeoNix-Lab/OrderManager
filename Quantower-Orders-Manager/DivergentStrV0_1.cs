@@ -33,7 +33,7 @@ namespace DivergentStrV0_1
         private int _uiAtrLen = 14;
         private bool _uiAtrNormalize = true;
         private double _uiAtrSlopeThr = 0.015;
-        private double _uiAtrSlippageMultiplier = 0.0;
+        private double _uiAtrSlippageMultiplier = 1.0;
 
         private int _uiRvolShortLen = 14;
         private int _uiRvolLongLen = 60;
@@ -76,7 +76,8 @@ namespace DivergentStrV0_1
         private int _maxOpen = 3;
         private double _maxSessionLossUsd = 100.0;
         private int _verbosityFrequency = 3;
-        private int _slippageAtrPeriod = 14;        private bool _entryUseRVOL = true;
+        private int _slippageAtrPeriod = 14;        
+        private bool _entryUseRVOL = true;
         private bool _entryUseVDPS = true;
         private bool _entryUseVDStrong = true;
         private bool _entryUseHMA = true;
@@ -254,7 +255,7 @@ namespace DivergentStrV0_1
                 });
 
                 _strategy.Init(req, _Account, _inputDebugMode, "", false);
-                StrategyLogHub.Publish("DivergentStr", $"Strategy initialized | AppDomain: {AppDomain.CurrentDomain.FriendlyName} | UseDefaultSessions: {_UseDefaultSessions}", LoggingLevel.System);
+                //StrategyLogHub.Publish("DivergentStr", $"Strategy initialized | AppDomain: {AppDomain.CurrentDomain.FriendlyName} | UseDefaultSessions: {_UseDefaultSessions}", LoggingLevel.System);
                 _conditionable = _strategy;
             }
         }
@@ -272,101 +273,101 @@ namespace DivergentStrV0_1
             //TODO: [DEBUG] Explicitly release remaining resources when removing the strategy.
         }
 
-        protected override void OnSettingsUpdated()
-        {
-            base.OnSettingsUpdated();
+        //protected override void OnSettingsUpdated()
+        //{
+        //    base.OnSettingsUpdated();
 
-            try
-            {
-                // 1) Aggiorna ATR indicator
-                if (this.AtrIndicator != null)
-                {
-                    this.AtrIndicator.Settings = new List<SettingItem>
-                    {
-                        new SettingItemInteger("Short Length", _uiRvolShortLen),
-                        new SettingItemInteger("Long Length", _uiRvolLongLen),
-                        new SettingItemBoolean("Use Price for HMA", _uiHmaUsePrice),
-                        new SettingItemInteger("HMA Length (Composite)", _uiHmaLenComposite),
-                        new SettingItemInteger("HMA Length (Pure)", _uiHmaLenPure),
-                        new SettingItemBoolean("Use ATR-scaled HMA", _uiUseAtrScaledHma),
-                        new SettingItemInteger("ATR Length", _uiAtrLen),
-                        new SettingItemBoolean("Use ATR Normalization", _uiAtrNormalize),
-                        new SettingItemDouble("Slope Threshold (norm.)", _uiAtrSlopeThr)
-                    };
-                }
+        //    try
+        //    {
+        //        // 1) Aggiorna ATR indicator
+        //        if (this.AtrIndicator != null)
+        //        {
+        //            this.AtrIndicator.Settings = new List<SettingItem>
+        //            {
+        //                new SettingItemInteger("Short Length", _uiRvolShortLen),
+        //                new SettingItemInteger("Long Length", _uiRvolLongLen),
+        //                new SettingItemBoolean("Use Price for HMA", _uiHmaUsePrice),
+        //                new SettingItemInteger("HMA Length (Composite)", _uiHmaLenComposite),
+        //                new SettingItemInteger("HMA Length (Pure)", _uiHmaLenPure),
+        //                new SettingItemBoolean("Use ATR-scaled HMA", _uiUseAtrScaledHma),
+        //                new SettingItemInteger("ATR Length", _uiAtrLen),
+        //                new SettingItemBoolean("Use ATR Normalization", _uiAtrNormalize),
+        //                new SettingItemDouble("Slope Threshold (norm.)", _uiAtrSlopeThr)
+        //            };
+        //        }
 
-                // 2) Aggiorna Delta indicator
-                if (this.DeltaIndicato != null)
-                {
-                    this.DeltaIndicato.Settings = new List<SettingItem>
-                    {
-                        new SettingItemBoolean("Force Volume Ready", _uiForceVolumeReady),
-                        new SettingItemBoolean("Delta: Use Median", _uiDeltaUseMedian),
-                        new SettingItemInteger("Delta: Lookback", _uiDeltaLookback),
-                        new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
-                        new SettingItemInteger("Delta Strength: Lookback", _uiDeltaStrengthLookback),
-                        new SettingItemDouble("Delta Strength: Threshold Multiplier", _uiDeltaStrengthMult),
-                        new SettingItemDouble("VD Divergence: Threshold Multiplier", _uiDeltaDivergenceMult),
-                        new SettingItemInteger("VDtV Lookback", _uiVDtVLookback),
-                        new SettingItemDouble("VDtV Threshold Multiplier", _uiDeltaVDtVMult)
-                    };
-                }
+        //        // 2) Aggiorna Delta indicator
+        //        if (this.DeltaIndicato != null)
+        //        {
+        //            this.DeltaIndicato.Settings = new List<SettingItem>
+        //            {
+        //                new SettingItemBoolean("Force Volume Ready", _uiForceVolumeReady),
+        //                new SettingItemBoolean("Delta: Use Median", _uiDeltaUseMedian),
+        //                new SettingItemInteger("Delta: Lookback", _uiDeltaLookback),
+        //                new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
+        //                new SettingItemInteger("Delta Strength: Lookback", _uiDeltaStrengthLookback),
+        //                new SettingItemDouble("Delta Strength: Threshold Multiplier", _uiDeltaStrengthMult),
+        //                new SettingItemDouble("VD Divergence: Threshold Multiplier", _uiDeltaDivergenceMult),
+        //                new SettingItemInteger("VDtV Lookback", _uiVDtVLookback),
+        //                new SettingItemDouble("VDtV Threshold Multiplier", _uiDeltaVDtVMult)
+        //            };
+        //        }
 
-                // 3) Aggiorna mapping condizioni della strategy interna
-                if (this._strategy != null)
-                {
-                    var entry = new List<string>();
-                    if (_entryUseRVOL) entry.Add("RvolSignal");
-                    if (_entryUseHMA) entry.Add("HMA_Direction");
-                    if (_entryUseVDPS) entry.Add("APAVD_Flag");
-                    if (_entryUseVDStrong) entry.Add("VD_Strength_Flag");
-                    if (_entryUseVDtV) entry.Add("VD_to_Volume_Flag");
-                    if (_entryUseVDP) entry.Add("VD_Price_Divergent_Flag");
+        //        // 3) Aggiorna mapping condizioni della strategy interna
+        //        if (this._strategy != null)
+        //        {
+        //            var entry = new List<string>();
+        //            if (_entryUseRVOL) entry.Add("RvolSignal");
+        //            if (_entryUseHMA) entry.Add("HMA_Direction");
+        //            if (_entryUseVDPS) entry.Add("APAVD_Flag");
+        //            if (_entryUseVDStrong) entry.Add("VD_Strength_Flag");
+        //            if (_entryUseVDtV) entry.Add("VD_to_Volume_Flag");
+        //            if (_entryUseVDP) entry.Add("VD_Price_Divergent_Flag");
 
-                    var exit = new List<string>();
-                    if (_exitUseRVOL) exit.Add("RvolSignal");
-                    if (_exitUseHMA) exit.Add("HMA_Direction");
-                    if (_exitUseVDPS) exit.Add("APAVD_Flag");
-                    if (_exitUseVDStrong) exit.Add("VD_Strength_Flag");
-                    if (_exitUseVDtV) exit.Add("VD_to_Volume_Flag");
-                    if (_exitUseVDP) exit.Add("VD_Price_Divergent_Flag");
+        //            var exit = new List<string>();
+        //            if (_exitUseRVOL) exit.Add("RvolSignal");
+        //            if (_exitUseHMA) exit.Add("HMA_Direction");
+        //            if (_exitUseVDPS) exit.Add("APAVD_Flag");
+        //            if (_exitUseVDStrong) exit.Add("VD_Strength_Flag");
+        //            if (_exitUseVDtV) exit.Add("VD_to_Volume_Flag");
+        //            if (_exitUseVDP) exit.Add("VD_Price_Divergent_Flag");
 
-                    _strategy.ConfigureConditions(entry, _entryMinConditions, exit, _exitMinConditions);
+        //            _strategy.ConfigureConditions(entry, _entryMinConditions, exit, _exitMinConditions);
 
-                    // aggiorna anche gli SL/TP se cambiano
-                    _strategy.InjectStrategy(new RowanSlTpStrategy(
-                        (int)Math.Round(_minSlInTicks),
-                        (int)Math.Round(_maxSlInTicks))
-                    {
-                        MinTpInTicks = (int)Math.Max(1, Math.Round(_minTpInTicks)),
-                        MaxTpInTicks = (int)Math.Max(Math.Max(1, Math.Round(_minTpInTicks)), Math.Max(1, Math.Round(_maxTpInTicks))),
-                        AtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, _uiAtrSlippageMultiplier))
-                    });
+        //            // aggiorna anche gli SL/TP se cambiano
+        //            _strategy.InjectStrategy(new RowanSlTpStrategy(
+        //                (int)Math.Round(_minSlInTicks),
+        //                (int)Math.Round(_maxSlInTicks))
+        //            {
+        //                MinTpInTicks = (int)Math.Max(1, Math.Round(_minTpInTicks)),
+        //                MaxTpInTicks = (int)Math.Max(Math.Max(1, Math.Round(_minTpInTicks)), Math.Max(1, Math.Round(_maxTpInTicks))),
+        //                AtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, _uiAtrSlippageMultiplier))
+        //            });
 
-                }
+        //        }
 
-                // 4) Risincronizza le sessioni se cambiate
-                StaticSessionManager.Dispose();
-                if (_UseDefaultSessions || _CustomSessionsCount == 0 || _CustomSessions.Count == 0)
-                {
-                    foreach (var s in OffMarketUtc.Build())
-                        StaticSessionManager.AddSession(s, Utils.SessionType.Target);
-                    foreach (var sv in InMarketUtc.Build())
-                        StaticSessionManager.AddSession(sv, Utils.SessionType.Trade);
-                }
-                else
-                {
-                    foreach (var cs in _CustomSessions)
-                        StaticSessionManager.AddSession(cs, Utils.SessionType.Trade);
-                    foreach (var sx in OffMarketUtc.Build())
-                        StaticSessionManager.AddSession(sx, Utils.SessionType.Target);
-                }
-            }
-            catch (Exception ex)
-            {
-                Core.Instance.Loggers.Log($"OnSettingsUpdated error: {ex.Message}", LoggingLevel.Error);
-            }
-        }
+        //        // 4) Risincronizza le sessioni se cambiate
+        //        StaticSessionManager.Dispose();
+        //        if (_UseDefaultSessions || _CustomSessionsCount == 0 || _CustomSessions.Count == 0)
+        //        {
+        //            foreach (var s in OffMarketUtc.Build())
+        //                StaticSessionManager.AddSession(s, Utils.SessionType.Target);
+        //            foreach (var sv in InMarketUtc.Build())
+        //                StaticSessionManager.AddSession(sv, Utils.SessionType.Trade);
+        //        }
+        //        else
+        //        {
+        //            foreach (var cs in _CustomSessions)
+        //                StaticSessionManager.AddSession(cs, Utils.SessionType.Trade);
+        //            foreach (var sx in OffMarketUtc.Build())
+        //                StaticSessionManager.AddSession(sx, Utils.SessionType.Target);
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Core.Instance.Loggers.Log($"OnSettingsUpdated error: {ex.Message}", LoggingLevel.Error);
+        //    }
+        //}
 
 
         public override IList<SettingItem> Settings
