@@ -19,14 +19,14 @@ namespace DivergentStrV0_1.Strategies
 
     internal class RowanSlTpStrategy : ISlTpStrategy<SlTpData>
     {
-        //?? TODO: [DEBUG] Expose ATR and TP distance tunables through validated parameters
+        //TODO: [DEBUG] Expose ATR and TP distance tunables through validated parameters
 
         public int max_slInTicks { get; set; }
         public int min_slInTicks { get; set; }
 
         public int MinTpInTicks { get; set; }
         public int MaxTpInTicks { get; set; }
-        //?? TODO: [DEBUG] Keep ATR slippage multiplier inside [0,2] guardrails
+        //TODO: [DEBUG] Keep ATR slippage multiplier inside [0,2] guardrails
         public double AtrSlippageMultiplier { get; set; } = 0.0;
         private int delta_InTicks;
 
@@ -46,10 +46,10 @@ namespace DivergentStrV0_1.Strategies
 
         public List<double> CalculateSl(SlTpData marketData, Side side, double entry_price)
         {
-            //?? TODO: [DEBUG] Derive SL from previous candle range plus ATR multiplier, enforcing min/max distance guards
+            //TODO: [DEBUG] Derive SL from previous candle range plus ATR multiplier, enforcing min/max distance guards
 
             var sl_temp = marketData.Symbol.CalculateTicks(entry_price, marketData.SlTriggerPrice);
-            //?? TODO: [DEBUG] Confirm ATR slippage contribution respects configured bounds
+            //TODO: [DEBUG] Confirm ATR slippage contribution respects configured bounds
             var extraTicks = Math.Max(0, (int)Math.Round(Math.Abs(marketData.AtrInTicks) * Math.Max(0.0, Math.Min(2.0, this.AtrSlippageMultiplier))));
             var desiredAbsTicks = Math.Abs(sl_temp) + extraTicks;
             var sl = (int)Math.Clamp(Math.Ceiling(desiredAbsTicks), this.min_slInTicks, this.max_slInTicks);
@@ -63,7 +63,7 @@ namespace DivergentStrV0_1.Strategies
 
         public List<double> CalculateTp(SlTpData marketData, Side side, double entry_price)
         {
-            //?? TODO: [DEBUG] Ensure TP level cache is refreshed before evaluating targets
+            //TODO: [DEBUG] Ensure TP level cache is refreshed before evaluating targets
             if (!StaticSessionManager.TpLevels.Levels.Any())
                 StaticSessionManager.CalculateTPLevels();
 
@@ -101,7 +101,7 @@ namespace DivergentStrV0_1.Strategies
             }
             else
             {
-                //?? TODO: [DEBUG] Verify fallback target clamps to configured bounds when no TP level matches
+                //TODO: [DEBUG] Verify fallback target clamps to configured bounds when no TP level matches
                 selectedTpItem = minTargetPrice;
                 double fallbackTicks = Math.Abs(marketData.Symbol.CalculateTicks(entry_price, selectedTpItem));
                 if (fallbackTicks > maxTpTicks)
@@ -113,21 +113,21 @@ namespace DivergentStrV0_1.Strategies
 
         public Func<double, double> UpdateSl(SlTpData marketData, ITpSlItems item)
         {
-            //?? TODO: [DEBUG] Reconcile SL adjustments with live order book state
-            //?? TODO: [DEBUG] Rework SL trailing logic around previous candle structure and order lifecycle management
+            //TODO: [DEBUG] Reconcile SL adjustments with live order book state
+            //TODO: [DEBUG] Rework SL trailing logic around previous candle structure and order lifecycle management
 
             try
             {
                 return current_sl =>
                 {
-                    //?? TODO: [DEBUG] Replace placeholder delta check with candle-based recalculation
+                    //TODO: [DEBUG] Replace placeholder delta check with candle-based recalculation
                     var delta = marketData.Symbol.CalculateTicks(current_sl, marketData.currentPrice);
                     bool isOut = delta > this.delta_InTicks;
 
                     if (!isOut)
                         return current_sl;
 
-                    //?? TODO: [DEBUG] Flesh out trailing branch coverage for all order states
+                    //TODO: [DEBUG] Flesh out trailing branch coverage for all order states
                     return item.Side switch
                     {
                         Side.Buy => marketData.Symbol.CalculatePrice(marketData.currentPrice, -max_slInTicks),
@@ -138,18 +138,19 @@ namespace DivergentStrV0_1.Strategies
             }
             catch (Exception)
             {
-                //?? TODO: [DEBUG] Log SL update failures with contextual data
-                //?? TODO: [DEBUG] Decide fallback strategy when SL recalculation fails
+                //TODO: [DEBUG] Log SL update failures with contextual data
+                //TODO: [DEBUG] Decide fallback strategy when SL recalculation fails
                 return current_sl => current_sl;
             }
         }
 
         public Func<double, double> UpdateTp(SlTpData marketData, ITpSlItems item)
         {
-            //?? TODO: [DEBUG] Implement TP update policy (fixed vs trailing) instead of throwing
-            //?? TODO: [DEBUG] Return current TP until dynamic management is implemented
+            //TODO: [DEBUG] Implement TP update policy (fixed vs trailing) instead of throwing
+            //TODO: [DEBUG] Return current TP until dynamic management is implemented
 
             throw new NotImplementedException();
         }
     }
 }
+

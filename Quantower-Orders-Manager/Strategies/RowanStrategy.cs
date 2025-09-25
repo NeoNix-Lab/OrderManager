@@ -51,7 +51,7 @@ namespace DivergentStrV0_1.Strategies
 
         public bool AllowToTrade
         {
-            //?? TODO: [DEBUG] Audit session loss guard to avoid false positives
+            //TODO: [DEBUG] Audit session loss guard to avoid false positives
             get
             {
                 var usdloss = this.Metrics.NetProfit - this._startSessionLoss;
@@ -158,7 +158,7 @@ namespace DivergentStrV0_1.Strategies
         {
             base.OnVolumeDataReady();
 
-            //?? TODO: [DEBUG] Verify async volume callbacks reattach indicators safely
+            //TODO: [DEBUG] Verify async volume callbacks reattach indicators safely
             if (this._loadAsync)
             {
                 if (this._atrIndicator.Count == 0)
@@ -175,7 +175,7 @@ namespace DivergentStrV0_1.Strategies
         {
             if (e == Status.Active)
             {
-                //?? TODO: [DEBUG] Reset session loss baseline when status becomes Active
+                //TODO: [DEBUG] Reset session loss baseline when status becomes Active
                 this._startSessionLoss = this.Metrics.NetProfit;
                 this._sessionClosed = false;
             }
@@ -201,11 +201,11 @@ namespace DivergentStrV0_1.Strategies
         public override double SetQuantity() => this._totalQuantity / this._maxOpen;
         public override void Update(object obj)
         {
-            //?? TODO: [DEBUG] Review market data payload completeness before trading decisions
+            //TODO: [DEBUG] Review market data payload completeness before trading decisions
             this._logsEntry.Clear();
             this._logsExits.Clear();
 
-            //?? TODO: [DEBUG] Detect duplicate indicator registrations triggered by history provider bug
+            //TODO: [DEBUG] Detect duplicate indicator registrations triggered by history provider bug
 
             if (this._atrIndicator.Count == 0)
                 this.HistoryProvider.HistoricalData.AddIndicator(this._atrIndicator);
@@ -213,7 +213,7 @@ namespace DivergentStrV0_1.Strategies
                 this.HistoryProvider.HistoricalData.AddIndicator(this._deltaBaseIndicator);
             if (this._slipageAtrIndicator.Count == 0)
                 this.HistoryProvider.HistoricalData.AddIndicator(this._slipageAtrIndicator);
-            //?? TODO: [DEBUG] Guard against unexpected history event payload shapes
+            //TODO: [DEBUG] Guard against unexpected history event payload shapes
             HistoryEventArgs e = obj as HistoryEventArgs ?? null;
             if (e == null)
             {
@@ -243,8 +243,8 @@ namespace DivergentStrV0_1.Strategies
                     }
                     return;
                 }
-            //?? TODO: [DEBUG] Validate ATR-based slippage computation for entry price
-            //?? TODO: [DEBUG] Double-check history index offsets when reading price levels
+            //TODO: [DEBUG] Validate ATR-based slippage computation for entry price
+            //TODO: [DEBUG] Double-check history index offsets when reading price levels
             SlTpData marketData = new SlTpData()
                 {
                     currentPrice = item[PriceType.Open],
@@ -293,7 +293,7 @@ namespace DivergentStrV0_1.Strategies
                 if (!_strategyActive)
                     return;
 
-                //?? TODO: [DEBUG] Confirm entry sizing respects max exposure thresholds
+                //TODO: [DEBUG] Confirm entry sizing respects max exposure thresholds
 
                 if (action == TradeAction.Buy || action == TradeAction.Sell)
                 {
@@ -377,7 +377,7 @@ namespace DivergentStrV0_1.Strategies
                 {
                     try
                     {
-                        //?? TODO: [DEBUG] Track SL/TP adjustments for consistency with live positions
+                        //TODO: [DEBUG] Track SL/TP adjustments for consistency with live positions
                         this.UpdateSlTp(marketData, isSl: true);
 
                     }
@@ -405,7 +405,7 @@ namespace DivergentStrV0_1.Strategies
             catch (Exception ex)
             {
 
-                //?? TODO: [DEBUG] Escalate unexpected update exceptions with enriched diagnostics
+                //TODO: [DEBUG] Escalate unexpected update exceptions with enriched diagnostics
                 Core.Instance.Loggers.Log("[RowanStrategy] " + $"Rowan Strategy error at Update with message : {ex.Message}", LoggingLevel.Error);
                 throw;
             }
@@ -413,7 +413,7 @@ namespace DivergentStrV0_1.Strategies
 
         private void ComputeTradeAction(SlTpData data, Side side ) => this.Trade(side, data.currentPrice, data, data);
 
-        //?? TODO: [DEBUG] Validate forced close routine ensures manager state consistency
+        //TODO: [DEBUG] Validate forced close routine ensures manager state consistency
         private bool ForceClosePositions(int max_attempt)
         {
             var posId = Core.Instance.Positions.Where(p => p.Symbol == this.Symbol && p.Account == this.Account)
@@ -421,7 +421,7 @@ namespace DivergentStrV0_1.Strategies
             var objs = this._manager.Items.Where(x => x.Position != null && posId.Contains(x.Position.Id)).ToList();
             foreach (var obj in objs)
             {
-                //?? TODO: [DEBUG] Replace temporary position status refresh during forced close
+                //TODO: [DEBUG] Replace temporary position status refresh during forced close
                 var o = obj as TpSlItemPosition;
                 o.TryUpdateStatus(true);
             }
@@ -431,7 +431,7 @@ namespace DivergentStrV0_1.Strategies
 
         private TradeSignal CalculateTradeSignal(bool entrySign)
         {
-            //?? TODO: [DEBUG] Validate signal tallies align with configured thresholds
+            //TODO: [DEBUG] Validate signal tallies align with configured thresholds
             List<string> activeNames = entrySign ? _entryLineNames : _exitLineNames;
 
             int longCount = 0, shortCount = 0;
@@ -480,4 +480,5 @@ namespace DivergentStrV0_1.Strategies
         }
     }
 }
+
 
