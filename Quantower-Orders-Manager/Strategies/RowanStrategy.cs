@@ -244,6 +244,7 @@ namespace DivergentStrV0_1.Strategies
                     return;
                 }
             //TODO: [DEBUG] Validate ATR-based slippage computation for entry price
+
             //TODO: [DEBUG] Double-check history index offsets when reading price levels
             SlTpData marketData = new SlTpData()
                 {
