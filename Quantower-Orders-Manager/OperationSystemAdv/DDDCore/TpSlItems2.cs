@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
-using DivergentStrV0_1.Utils;
 
 namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 {

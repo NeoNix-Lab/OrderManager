@@ -94,6 +94,32 @@ namespace DivergentStrV0_1
         private int _exitMinConditions = 1;
         #endregion
 
+        #region ====== Lot System Parameters ======
+        private bool _useLotSystem = false;
+        private int _lotMin = 0;
+        private int _lotStep = 0;
+        // Cache of last-published values to detect changes in OnSettingsUpdated
+        private int _lastLotMinPublished = int.MinValue;
+        private int _lastLotStepPublished = int.MinValue;
+        private bool _lastUseLotSystemPublished = false;
+        private string ComputeLotSelectionBaseAsset()
+        {
+            try
+            {
+                int lots = Math.Max(0, _lotMin + _lotStep);
+                double lotSize = this._Symbol != null ? this._Symbol.LotSize : 1.0;
+                double last = this._Symbol != null ? this._Symbol.Last : 0.0;
+                double value = lots * lotSize * last;
+                return $"({lots}) * {lotSize} * {last} = {value}";
+            }
+            catch
+            {
+                int lots = Math.Max(0, _lotMin + _lotStep);
+                return $"({lots}) * LotSize * Last";
+            }
+        }
+        #endregion
+
         #region ====== Input Parameters (Quantower Integration) ======
         [InputParameter("Symbol", 0)]
         public Symbol _Symbol;
@@ -218,6 +244,9 @@ namespace DivergentStrV0_1
                         StaticSessionManager.AddSession(sx, Utils.SessionType.Target);
                 }
                 //TODO: [DEBUG] Ensure RowanStrategy dependencies are resolved prior to construction.
+                // Compute effective quantity: either direct value or lot-based
+                double lotQuantity = _useLotSystem ? Math.Max(0, (double)(_lotMin + _lotStep)) : 0;
+
                 _strategy = new RowanStrategy(
                     this.DeltaIndicato,
                     this.AtrIndicator,
@@ -225,7 +254,8 @@ namespace DivergentStrV0_1
                     _quantity,
                     _maxSessionLossUsd,
                     _verbosityFrequency,
-                    Math.Max(1, _slippageAtrPeriod));
+                    Math.Max(1, _slippageAtrPeriod),
+                    lotQuantity);
                 //TODO: [DEBUG] Review entry/exit signal mappings whenever UI flags change.
                 var entryLineNames = new List<string>();
                 if (_entryUseRVOL) entryLineNames.Add("RvolSignal");
@@ -273,101 +303,36 @@ namespace DivergentStrV0_1
             //TODO: [DEBUG] Explicitly release remaining resources when removing the strategy.
         }
 
-        //protected override void OnSettingsUpdated()
-        //{
-        //    base.OnSettingsUpdated();
+        protected override void OnSettingsUpdated()
+        {
+            base.OnSettingsUpdated();
 
-        //    try
-        //    {
-        //        // 1) Aggiorna ATR indicator
-        //        if (this.AtrIndicator != null)
-        //        {
-        //            this.AtrIndicator.Settings = new List<SettingItem>
-        //            {
-        //                new SettingItemInteger("Short Length", _uiRvolShortLen),
-        //                new SettingItemInteger("Long Length", _uiRvolLongLen),
-        //                new SettingItemBoolean("Use Price for HMA", _uiHmaUsePrice),
-        //                new SettingItemInteger("HMA Length (Composite)", _uiHmaLenComposite),
-        //                new SettingItemInteger("HMA Length (Pure)", _uiHmaLenPure),
-        //                new SettingItemBoolean("Use ATR-scaled HMA", _uiUseAtrScaledHma),
-        //                new SettingItemInteger("ATR Length", _uiAtrLen),
-        //                new SettingItemBoolean("Use ATR Normalization", _uiAtrNormalize),
-        //                new SettingItemDouble("Slope Threshold (norm.)", _uiAtrSlopeThr)
-        //            };
-        //        }
-
-        //        // 2) Aggiorna Delta indicator
-        //        if (this.DeltaIndicato != null)
-        //        {
-        //            this.DeltaIndicato.Settings = new List<SettingItem>
-        //            {
-        //                new SettingItemBoolean("Force Volume Ready", _uiForceVolumeReady),
-        //                new SettingItemBoolean("Delta: Use Median", _uiDeltaUseMedian),
-        //                new SettingItemInteger("Delta: Lookback", _uiDeltaLookback),
-        //                new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
-        //                new SettingItemInteger("Delta Strength: Lookback", _uiDeltaStrengthLookback),
-        //                new SettingItemDouble("Delta Strength: Threshold Multiplier", _uiDeltaStrengthMult),
-        //                new SettingItemDouble("VD Divergence: Threshold Multiplier", _uiDeltaDivergenceMult),
-        //                new SettingItemInteger("VDtV Lookback", _uiVDtVLookback),
-        //                new SettingItemDouble("VDtV Threshold Multiplier", _uiDeltaVDtVMult)
-        //            };
-        //        }
-
-        //        // 3) Aggiorna mapping condizioni della strategy interna
-        //        if (this._strategy != null)
-        //        {
-        //            var entry = new List<string>();
-        //            if (_entryUseRVOL) entry.Add("RvolSignal");
-        //            if (_entryUseHMA) entry.Add("HMA_Direction");
-        //            if (_entryUseVDPS) entry.Add("APAVD_Flag");
-        //            if (_entryUseVDStrong) entry.Add("VD_Strength_Flag");
-        //            if (_entryUseVDtV) entry.Add("VD_to_Volume_Flag");
-        //            if (_entryUseVDP) entry.Add("VD_Price_Divergent_Flag");
-
-        //            var exit = new List<string>();
-        //            if (_exitUseRVOL) exit.Add("RvolSignal");
-        //            if (_exitUseHMA) exit.Add("HMA_Direction");
-        //            if (_exitUseVDPS) exit.Add("APAVD_Flag");
-        //            if (_exitUseVDStrong) exit.Add("VD_Strength_Flag");
-        //            if (_exitUseVDtV) exit.Add("VD_to_Volume_Flag");
-        //            if (_exitUseVDP) exit.Add("VD_Price_Divergent_Flag");
-
-        //            _strategy.ConfigureConditions(entry, _entryMinConditions, exit, _exitMinConditions);
-
-        //            // aggiorna anche gli SL/TP se cambiano
-        //            _strategy.InjectStrategy(new RowanSlTpStrategy(
-        //                (int)Math.Round(_minSlInTicks),
-        //                (int)Math.Round(_maxSlInTicks))
-        //            {
-        //                MinTpInTicks = (int)Math.Max(1, Math.Round(_minTpInTicks)),
-        //                MaxTpInTicks = (int)Math.Max(Math.Max(1, Math.Round(_minTpInTicks)), Math.Max(1, Math.Round(_maxTpInTicks))),
-        //                AtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, _uiAtrSlippageMultiplier))
-        //            });
-
-        //        }
-
-        //        // 4) Risincronizza le sessioni se cambiate
-        //        StaticSessionManager.Dispose();
-        //        if (_UseDefaultSessions || _CustomSessionsCount == 0 || _CustomSessions.Count == 0)
-        //        {
-        //            foreach (var s in OffMarketUtc.Build())
-        //                StaticSessionManager.AddSession(s, Utils.SessionType.Target);
-        //            foreach (var sv in InMarketUtc.Build())
-        //                StaticSessionManager.AddSession(sv, Utils.SessionType.Trade);
-        //        }
-        //        else
-        //        {
-        //            foreach (var cs in _CustomSessions)
-        //                StaticSessionManager.AddSession(cs, Utils.SessionType.Trade);
-        //            foreach (var sx in OffMarketUtc.Build())
-        //                StaticSessionManager.AddSession(sx, Utils.SessionType.Target);
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Core.Instance.Loggers.Log($"OnSettingsUpdated error: {ex.Message}", LoggingLevel.Error);
-        //    }
-        //}
+            try
+            {
+                // Refresh the computed descriptive string when dependent settings change
+                var settings = this.Settings;
+                if (settings != null)
+                {
+                    var lotStringItem = settings.FirstOrDefault(si => si.Text == "Lot Selection Base Asset");
+                    if (lotStringItem is SettingItemString s)
+                    {
+                        // Update only when lot-related settings actually change
+                        bool changed = (_lotMin != _lastLotMinPublished) || (_lotStep != _lastLotStepPublished) || (_useLotSystem != _lastUseLotSystemPublished);
+                        if (changed)
+                        {
+                            s.Value = ComputeLotSelectionBaseAsset();
+                            _lastLotMinPublished = _lotMin;
+                            _lastLotStepPublished = _lotStep;
+                            _lastUseLotSystemPublished = _useLotSystem;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Core.Instance.Loggers.Log($"OnSettingsUpdated (Lot string refresh) error: {ex.Message}", LoggingLevel.Error);
+            }
+        }
 
 
         public override IList<SettingItem> Settings
@@ -541,6 +506,39 @@ namespace DivergentStrV0_1
                     DecimalPlaces = 2,
                     Increment = 0.01,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
+                });
+                // Lot System group
+                settings.Add(new SettingItemBoolean("Use Lot System", _useLotSystem)
+                {
+                    Text = "Use Lot System",
+                    SortIndex = 3013,
+                    Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
+                });
+
+                settings.Add(new SettingItemInteger("Lot Minimum", _lotMin)
+                {
+                    Text = "Lot Minimum",
+                    SortIndex = 3014,
+                    Minimum = 0,
+                    Maximum = int.MaxValue,
+                    Relation = new SettingItemRelationVisibility("Use Lot System", true)
+                });
+
+                settings.Add(new SettingItemInteger("Lot Step", _lotStep)
+                {
+                    Text = "Lot Step",
+                    SortIndex = 3015,
+                    Minimum = 0,
+                    Maximum = int.MaxValue,
+                    Relation = new SettingItemRelationVisibility("Use Lot System", true)
+                });
+
+                // Descriptive string for base asset value
+                settings.Add(new SettingItemString("Lot Selection Base Asset", ComputeLotSelectionBaseAsset())
+                {
+                    Text = "Lot Selection Base Asset",
+                    SortIndex = 3016,
+                    Relation = new SettingItemRelationVisibility("Use Lot System", true)
                 });
                 #endregion
 
@@ -919,6 +917,29 @@ namespace DivergentStrV0_1
                         Debug = debugMode;
                     }
 
+                    // ===== Lot System =====
+                    if (value.TryGetValue("Use Lot System", out bool useLot))
+                        _useLotSystem = useLot;
+
+                    if (value.TryGetValue("Lot Minimum", out int lotMin))
+                        _lotMin = Math.Max(0, lotMin);
+
+                    if (value.TryGetValue("Lot Step", out int lotStep))
+                        _lotStep = Math.Max(0, lotStep);
+
+                    // Refresh the descriptive string right after lot values change
+                    try
+                    {
+                        var settingsNow = this.Settings;
+                        if (settingsNow != null)
+                        {
+                            var lotStringItem = settingsNow.FirstOrDefault(si => si.Text == "Lot Selection Base Asset");
+                            if (lotStringItem is SettingItemString s)
+                                s.Value = ComputeLotSelectionBaseAsset();
+                        }
+                    }
+                    catch { }
+
                     // ===== Entry Conditions =====
                     if (value.TryGetValue("Entry: Min Conditions", out int eMin))
                         _entryMinConditions = Math.Max(0, eMin);
@@ -1081,6 +1102,52 @@ namespace DivergentStrV0_1
             meter.CreateObservableGauge("DivergentStrV0_1_trade_session_active_flag",
                 () => StaticSessionManager.CurrentStatus == Status.Active ? 1 : 0,
                 "flag", "Trade Session Active (1/0)");
+
+            // Lot system related metrics
+            meter.CreateObservableGauge("DivergentStrV0_1_use_lot_system_flag",
+                () => _useLotSystem ? 1 : 0,
+                "flag", "Use Lot System Enabled (1/0)");
+
+            meter.CreateObservableGauge("DivergentStrV0_1_lot_min",
+                () => (double)Math.Max(0, _lotMin),
+                "lots", "Configured Lot Minimum");
+
+            meter.CreateObservableGauge("DivergentStrV0_1_lot_step",
+                () => (double)Math.Max(0, _lotStep),
+                "lots", "Configured Lot Step");
+
+            meter.CreateObservableGauge("DivergentStrV0_1_lots_total",
+                () => (double)Math.Max(0, _lotMin + _lotStep),
+                "lots", "Total Lots (min + step)");
+
+            meter.CreateObservableGauge("DivergentStrV0_1_symbol_has_value_flag",
+                () => _Symbol != null ? 1 : 0,
+                "flag", "Symbol Provided (1/0)");
+
+            meter.CreateObservableGauge("DivergentStrV0_1_symbol_lot_size",
+                () => {
+                    try { return _Symbol?.LotSize ?? 0.0; } catch { return 0.0; }
+                },
+                "units", "Symbol Lot Size");
+
+            meter.CreateObservableGauge("DivergentStrV0_1_symbol_last",
+                () => {
+                    try { return _Symbol?.Last ?? 0.0; } catch { return 0.0; }
+                },
+                "$", "Symbol Last Price");
+
+            meter.CreateObservableGauge("DivergentStrV0_1_lot_selection_value",
+                () => {
+                    try
+                    {
+                        int lots = Math.Max(0, _lotMin + _lotStep);
+                        double lotSize = _Symbol?.LotSize ?? 0.0;
+                        double last = _Symbol?.Last ?? 0.0;
+                        return lots * lotSize * last;
+                    }
+                    catch { return 0.0; }
+                },
+                "$", "Lot Selection Base Asset Value ((lots)*(lotSize)*(last))");
         }
         #endregion
     }

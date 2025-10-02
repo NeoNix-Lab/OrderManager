@@ -48,6 +48,7 @@ namespace DivergentStrV0_1.Strategies
         private int _exitMinConditions;
         private readonly List<string> _entryLineNames = new List<string>();
         private readonly List<string> _exitLineNames = new List<string>();
+        private double _lotQuantity;
 
         public bool AllowToTrade
         {
@@ -70,7 +71,7 @@ namespace DivergentStrV0_1.Strategies
         }
 
         public RowanStrategy(Indicator DeltaBaseIndicator, Indicator atrsIndicator, int max_open, double totalquantity,
-            double maxSessionLosUsd, int verbosity_frequency, int slipageAtrPeriod) : base()
+            double maxSessionLosUsd, int verbosity_frequency, int slipageAtrPeriod, double lotQuantity = 0.0) : base()
         {
 
             this._atrIndicator = atrsIndicator;
@@ -80,6 +81,7 @@ namespace DivergentStrV0_1.Strategies
             this._maxSessionLos = maxSessionLosUsd;
             this._verbosityFreq = verbosity_frequency;
             this._slipageAtrIndicator = Core.Instance.Indicators.BuiltIn.ATR(slipageAtrPeriod, MaMode.SMA);
+            this._lotQuantity = lotQuantity;
         }
 
         public void ConfigureConditions(IEnumerable<string> entryLineNames, int entryMinConditions,
@@ -198,7 +200,23 @@ namespace DivergentStrV0_1.Strategies
             base.Dispose();
         }
 
-        public override double SetQuantity() => this._totalQuantity / this._maxOpen;
+        public override double SetQuantity()
+        {
+            if (this._lotQuantity > 0)
+                try
+                {
+                    return this._lotQuantity * this.Symbol.LotSize * this.HistoryProvider.HistoricalData[0][PriceType.Close];
+                }
+                catch (Exception)
+                {
+
+                    Core.Instance.Loggers.Log("[RowanStrategy] [SetQuantityFailed]" + $"Rowan Strategy error at SetQuantity with message : Failed to compute lot-based quantity, fallback to fixed quantity", LoggingLevel.Error);
+                    return 0;
+                }
+
+            else
+                return this._totalQuantity / this._maxOpen;
+        }
         public override void Update(object obj)
         {
             //TODO: [DEBUG] Review market data payload completeness before trading decisions
@@ -213,6 +231,7 @@ namespace DivergentStrV0_1.Strategies
                 this.HistoryProvider.HistoricalData.AddIndicator(this._deltaBaseIndicator);
             if (this._slipageAtrIndicator.Count == 0)
                 this.HistoryProvider.HistoricalData.AddIndicator(this._slipageAtrIndicator);
+
             //TODO: [DEBUG] Guard against unexpected history event payload shapes
             HistoryEventArgs e = obj as HistoryEventArgs ?? null;
             if (e == null)
@@ -290,6 +309,9 @@ namespace DivergentStrV0_1.Strategies
                             action = TradeAction.Sell;
                         break;
                 }
+
+                if (this._lotQuantity > 0)
+                    this.OverrideQuantity(this.SetQuantity());
 
                 if (!_strategyActive)
                     return;

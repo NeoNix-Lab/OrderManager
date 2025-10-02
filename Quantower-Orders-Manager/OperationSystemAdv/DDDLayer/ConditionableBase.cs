@@ -1,10 +1,8 @@
 ﻿using DivergentStrV0_1.OperationSystemAdv.DDDCore;
-using DivergentStrV0_1.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
-using TradingPlatform.BusinessLayer.Integration;
 
 namespace DivergentStrV0_1.OperationSystemAdv
 {
@@ -67,6 +65,13 @@ namespace DivergentStrV0_1.OperationSystemAdv
                 //TODO: Handle this error
                 throw;
             }
+        }
+
+        public void OverrideQuantity(double quantity)
+        {
+            if (quantity <= 0)
+                throw new ArgumentException("Quantity must be positive", nameof(quantity));
+            this.Quantity = quantity;
         }
 
 
