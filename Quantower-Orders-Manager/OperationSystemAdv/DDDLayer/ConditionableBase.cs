@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
+using DivergentStrV0_1.Utils;
 
 namespace DivergentStrV0_1.OperationSystemAdv
 {
@@ -304,9 +305,7 @@ namespace DivergentStrV0_1.OperationSystemAdv
         {
             try
             {
-                //📝 TODO: [HIGH] Aggiungere validazione marketData non null
-                //📝 TODO: [MEDIUM] Ottimizzare: evitare multiple chiamate a GetActiveGuid()
-                //📝 TODO: [LOW] Considerare parametro enum invece di bool per isSl
+                //📝 TODO: [LOW] Ottimizzare: evitare multiple chiamate a GetActiveGuid()
 
                 if (!this.Initialized)
                 {
@@ -326,7 +325,6 @@ namespace DivergentStrV0_1.OperationSystemAdv
                     throw new InvalidOperationException("Strategy is not initialized.");
                 }
 
-                //📝 TODO: [HIGH] Aggiungere try-catch per gestire errori durante update
                 //📝 TODO: [MEDIUM] Aggiungere logging per ogni SL/TP update
 
                 #region 🧪 HACK [Soluzione temporanea o definitiva ]
@@ -352,7 +350,7 @@ namespace DivergentStrV0_1.OperationSystemAdv
             }
             catch (Exception ex)
             {
-                Core.Instance.Loggers.Log($"Error updating {(isSl ? "SL" : "TP")}: {ex.Message}");
+                AppLog.Error("ConditionableBase", "OrderUpdate", $"Error updating {(isSl ? "SL" : "TP")}: {ex.Message}");
                 throw;
             }
 

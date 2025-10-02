@@ -1,4 +1,5 @@
-﻿using System;
+using DivergentStrV0_1.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
@@ -153,7 +154,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
            if (Core.Instance.Positions.Any(x => x.Id == this.Position.Id))
                 Core.Instance.Positions.FirstOrDefault(x => x.Id == this.Position.Id).Close();
             else 
-                Core.Instance.Loggers.Log("[TpSlItemPosition] " + $"PositionManager {Id} tried to close a position that is not present anymore in the account", LoggingLevel.Error);
+                AppLog.Error("TpSlItemPosition", "PositionCheck", $"PositionManager {Id} tried to close a position that is not present anymore in the account");
 
            if (Core.Instance.Orders.Any(x => x.Symbol == this.EntryOrder.Symbol && x.Account == this.EntryOrder.Account))
            {
@@ -162,7 +163,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
                     order.Cancel();
            }
            else
-                Core.Instance.Loggers.Log("[TpSlItemPosition] " + $"PositionManager {Id} tried to cancel orders that are not present anymore in the account", LoggingLevel.Error);
+                AppLog.Error("TpSlItemPosition", "PositionCheck", $"PositionManager {Id} tried to cancel orders that are not present anymore in the account");
         }
 
         public void TryUpdateStatus(bool force = false)
@@ -173,7 +174,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 
             if (oldStatus != _status || force)
             {
-                Core.Instance.Loggers.Log("[TpSlItemPosition] " + $"PositionManager {Id} status changed to {_status}", LoggingLevel.Trading);
+                AppLog.Trading("TpSlItemPosition", "StatusChange", $"PositionManager {Id} status changed to {_status}");
                 if (_status == PositionManagerStatus.Closed || force)
                 {
                     this.Quit();
@@ -191,7 +192,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 
             if (oldStatus != _status)
             {
-                Core.Instance.Loggers.Log("[TpSlItemPosition] " + $"PositionManager {Id} status changed to {_status}", LoggingLevel.Trading);
+                AppLog.Trading("TpSlItemPosition", "StatusChange", $"PositionManager {Id} status changed to {_status}");
                 if (_status == PositionManagerStatus.Closed)
                 {
                     ItemClosed?.Invoke(this, new PositionManagerStatus[2] { oldStatus, _status });

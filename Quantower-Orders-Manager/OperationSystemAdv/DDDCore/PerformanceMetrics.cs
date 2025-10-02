@@ -36,6 +36,8 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
         public bool EnableHeavyMetrics { get; set; }
         public Account Account { get; private set; }
 
+        private double _startAccountBalance;
+
         public PerformanceMetrics()
         {
             this.EnableHeavyMetrics = false;
@@ -48,7 +50,12 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
             this.Account = account;
         }
 
-        public void SetAccount(Account account) => this.Account = account;
+        public void SetAccount(Account account)
+        {
+            this.Account = account; 
+            if (this.Account != null)
+                _startAccountBalance = this.Account.Balance;
+        }
         public void SetStrategyTag(string strategyTag) => this.StrategyTag = strategyTag;
         public void SetManager(IManagerFacade managerFacade) => this.manager = managerFacade;
 
@@ -59,7 +66,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
         [Metric("Base", "AccountBalance", "$")] public double AccountBalance => this.Account != null ? this.Account.Balance : 0;
 
         [Metric("Base", "Net Profit", "$")]
-        public double NetProfit => manager == null ? 0 : manager.Items.Sum(i => i.NetProfit) + manager.ClosedItems.Sum(i => i.NetProfit);
+        public double NetProfit => this._startAccountBalance > 0 ? this.Account.Balance - this._startAccountBalance : 0;
 
         [Metric("Base", "Gross Profit", "$")]
         public double GrossProfit => manager == null ? 0 : manager.Items.Sum(i => i.GrossProfit) + manager.ClosedItems.Sum(i => i.GrossProfit);

@@ -210,7 +210,7 @@ namespace DivergentStrV0_1.Strategies
                 catch (Exception)
                 {
 
-                    Core.Instance.Loggers.Log("[RowanStrategy] [SetQuantityFailed]" + $"Rowan Strategy error at SetQuantity with message : Failed to compute lot-based quantity, fallback to fixed quantity", LoggingLevel.Error);
+                    AppLog.Error("RowanStrategy", "SetQuantityFailed", "Rowan Strategy error at SetQuantity with message : Failed to compute lot-based quantity, fallback to fixed quantity");
                     return 0;
                 }
 
@@ -236,8 +236,8 @@ namespace DivergentStrV0_1.Strategies
             HistoryEventArgs e = obj as HistoryEventArgs ?? null;
             if (e == null)
             {
-                Core.Instance.Loggers.Log("[RowanStrategy] Rowan Strategy error at Update casting", LoggingLevel.Error);
-                Core.Instance.Loggers.Log("[RowanStrategy] Strategy Will be Disabled", LoggingLevel.Error);
+                AppLog.Error("RowanStrategy", "UpdateCasting", "Rowan Strategy error at Update casting");
+                AppLog.Error("RowanStrategy", "StrategyState", "Strategy Will be Disabled");
                 this.ForceClosePositions(5);
                 this._strategyActive = false;
                 return;
@@ -256,7 +256,7 @@ namespace DivergentStrV0_1.Strategies
 
                     if (StaticSessionManager.CurrentStatus == Status.Active && !_sessionClosed)
                     {
-                        Core.Instance.Loggers.Log("[RowanStrategy] Max session loss reached ", LoggingLevel.Trading);
+                        AppLog.Trading("RowanStrategy", "SessionGuard", "Max session loss reached");
                         this.ForceClosePositions(5);
                         _sessionClosed = true;
                     }
@@ -298,9 +298,8 @@ namespace DivergentStrV0_1.Strategies
                             action = TradeAction.Wait;
                         break;
                     case ExpositionSide.Both:
-                        Core.Instance.Loggers.Log("[RowanStrategy] Exposed on Both Sides positions ", LoggingLevel.Error);
+                        AppLog.Error("RowanStrategy", "ExposureCheck", "Exposed on Both Sides positions");
                         this.ForceClosePositions(5);
-                        //this._strategyActive = false;
                         break;
                     case ExpositionSide.Unexposed:
                         if (entry_signal == TradeSignal.OpenBuy)
@@ -322,12 +321,12 @@ namespace DivergentStrV0_1.Strategies
                 {
                     if (this.Metrics.ExposedAmount >= _maxOpen * this.Quantity)
                     {
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[TRADE SIGNAL] AVOIDED DUE MAX EXPO REACHED", LoggingLevel.Trading);
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}", LoggingLevel.Trading);
+                        AppLog.Trading("RowanStrategy", "TradeSignal", $"AVOIDED DUE MAX EXPO REACHED");
+                        AppLog.Trading("RowanStrategy", "TradeSignalContext", $"EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
                         foreach (var logsitem in this._logsEntry)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Entry Details: {logsitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "EntryDetails", $"Entry Details: {logsitem}");
                         foreach (var logsExitem in this._logsExits)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Exit Details: {logsExitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "ExitDetails", $"Exit Details: {logsExitem}");
                     }
                     else
                     {
@@ -342,11 +341,11 @@ namespace DivergentStrV0_1.Strategies
                             marketData.SlTriggerPrice = this.HistoryProvider.HistoricalData[1][PriceType.High];
                             this.ComputeTradeAction(marketData, Side.Sell);
                         }
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[TRADE SIGNAL] EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}", LoggingLevel.Trading);
+                        AppLog.Trading("RowanStrategy", "TradeSignal", $"EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
                         foreach (var logsitem in this._logsEntry)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Entry Details: {logsitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "EntryDetails", $"Entry Details: {logsitem}");
                         foreach (var logsExitem in this._logsExits)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Exit Details: {logsExitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "ExitDetails", $"Exit Details: {logsExitem}");
                     }
                 }
 
@@ -356,19 +355,19 @@ namespace DivergentStrV0_1.Strategies
 
                     if (res)
                     {
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[TRADE SIGNAL] ALL POSITIONS CLOSED EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}", LoggingLevel.Trading);
+                        AppLog.Trading("RowanStrategy", "TradeSignal", $"ALL POSITIONS CLOSED EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
                         foreach (var logsitem in this._logsEntry)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Entry Details: {logsitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "EntryDetails", $"Entry Details: {logsitem}");
                         foreach (var logsExitem in this._logsExits)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Exit Details: {logsExitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "ExitDetails", $"Exit Details: {logsExitem}");
                     }
                     else
                     {
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[TRADE SIGNAL] FAILED TO CLOSE POSITIONS, STRATEGY STOPPED EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}", LoggingLevel.Error);
+                        AppLog.Error("RowanStrategy", "TradeSignal", $"FAILED TO CLOSE POSITIONS, STRATEGY STOPPED EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
                         foreach (var logsitem in this._logsEntry)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Entry Details: {logsitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "EntryDetails", $"Entry Details: {logsitem}");
                         foreach (var logsExitem in this._logsExits)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Exit Details: {logsExitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "ExitDetails", $"Exit Details: {logsExitem}");
                         this._strategyActive = false;
                     }
                 }
@@ -381,17 +380,17 @@ namespace DivergentStrV0_1.Strategies
                         marketData.SlTriggerPrice = entry_signal == TradeSignal.OpenBuy ?
                             this.HistoryProvider.HistoricalData[1][PriceType.Low] : this.HistoryProvider.HistoricalData[1][PriceType.High];
 
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[TRADE SIGNAL] ALL POSITIONS CLOSED FOR REVERSAL EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}", LoggingLevel.Trading);
+                        AppLog.Trading("RowanStrategy", "TradeSignal", $"ALL POSITIONS CLOSED FOR REVERSAL EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
                         foreach (var logsitem in this._logsEntry)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Entry Details: {logsitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "EntryDetails", $"Entry Details: {logsitem}");
                         foreach (var logsExitem in this._logsExits)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Exit Details: {logsExitem}", LoggingLevel.Trading);
+                            AppLog.Trading("RowanStrategy", "ExitDetails", $"Exit Details: {logsExitem}");
 
                         this.ComputeTradeAction(marketData, entry_signal == TradeSignal.OpenBuy ? Side.Buy : Side.Sell);
                     }
                     else
                     {
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[TRADE SIGNAL] FAILED TO CLOSE POSITIONS FOR REVERSAL", LoggingLevel.Error);
+                        AppLog.Error("RowanStrategy", "TradeSignal", $"FAILED TO CLOSE POSITIONS FOR REVERSAL");
                         this._strategyActive = false;
                     }
                 }
@@ -401,10 +400,13 @@ namespace DivergentStrV0_1.Strategies
                     try
                     {
                         //TODO: [DEBUG] Track SL/TP adjustments for consistency with live positions
+
+                        //?? HINT: [Non agiamo su segnali differenti]
+
                         this.UpdateSlTp(marketData, isSl: true);
 
                     }
-                    catch { Utils.AppLog.Error("Update Sl", "Failed to update Sl"); }
+                    catch { AppLog.Error("RowanStrategy", "UpdateSl", "Failed to update Sl"); }
                 }
 
                 if (this._verbosityFreqCount <= this._verbosityFreq)
@@ -413,13 +415,13 @@ namespace DivergentStrV0_1.Strategies
 
                     if (this._verbosityFreqCount == this._verbosityFreq)
                     {
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[VERBOSE] Strategy status: SessionActive={StaticSessionManager.CurrentStatus}, AllowToTrade={this.AllowToTrade}", LoggingLevel.System);
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[VERBOSE] ExposedSide={this.Metrics.ExposedSide}, ExposedCount={this.Metrics.ExposedCount}", LoggingLevel.System);
-                        Core.Instance.Loggers.Log("[RowanStrategy] " + $"[VERBOSE] EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}", LoggingLevel.System);
+                        AppLog.System("RowanStrategy", "VerboseStatus", $"Strategy status: SessionActive={StaticSessionManager.CurrentStatus}, AllowToTrade={this.AllowToTrade}");
+                        AppLog.System("RowanStrategy", "VerboseExposure", $"ExposedSide={this.Metrics.ExposedSide}, ExposedCount={this.Metrics.ExposedCount}");
+                        AppLog.System("RowanStrategy", "VerboseSignals", $"EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
                         foreach (var logsitem in this._logsEntry)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Entry Details: {logsitem}", LoggingLevel.System);
+                            AppLog.System("RowanStrategy", "VerboseEntryDetails", $"Entry Details: {logsitem}");
                         foreach (var logsExitem in this._logsExits)
-                            Core.Instance.Loggers.Log("[RowanStrategy] " + $"Exit Details: {logsExitem}", LoggingLevel.System);
+                            AppLog.System("RowanStrategy", "VerboseExitDetails", $"Exit Details: {logsExitem}");
                         this._verbosityFreqCount = 0;
                     }
                 }
@@ -429,7 +431,7 @@ namespace DivergentStrV0_1.Strategies
             {
 
                 //TODO: [DEBUG] Escalate unexpected update exceptions with enriched diagnostics
-                Core.Instance.Loggers.Log("[RowanStrategy] " + $"Rowan Strategy error at Update with message : {ex.Message}", LoggingLevel.Error);
+                AppLog.Error("RowanStrategy", "Update", $"Rowan Strategy error at Update with message : {ex.Message}");
                 throw;
             }
         }

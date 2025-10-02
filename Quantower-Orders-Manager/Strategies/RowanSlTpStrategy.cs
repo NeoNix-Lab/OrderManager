@@ -113,8 +113,6 @@ namespace DivergentStrV0_1.Strategies
 
         public Func<double, double> UpdateSl(SlTpData marketData, ITpSlItems item)
         {
-            //TODO: [DEBUG] Reconcile SL adjustments with live order book state
-            //TODO: [DEBUG] Rework SL trailing logic around previous candle structure and order lifecycle management
 
             try
             {

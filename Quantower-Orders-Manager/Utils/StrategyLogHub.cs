@@ -55,10 +55,7 @@ namespace DivergentStrV0_1.Utils
         public static void Forward(string source, string message, LoggingLevel level, bool keepOriginalFormat = true)
         {
             Publish(source, message, level);
-            if (keepOriginalFormat)
-                Core.Instance.Loggers.Log(message, level);
-            else
-                Core.Instance.Loggers.Log($"[{source}] {message}", level);
+            AppLog.Log(source, "Forward", message, level);
         }
 
         public static void Clear()

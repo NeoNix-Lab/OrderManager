@@ -1,4 +1,5 @@
-﻿using System;
+using DivergentStrV0_1.Utils;
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -156,7 +157,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
                     }
                     catch (Exception ex)
                     {
-                        Core.Instance.Loggers.Log("[HistoryProvider] " + "Errore nel thread di VolumeAnalysis: " + ex.Message, LoggingLevel.Error);
+                        AppLog.Error("HistoryProvider", "VolumeAnalysis", $"Errore nel thread di VolumeAnalysis: {ex.Message}");
                     }
                 });
 
@@ -168,7 +169,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
             }
             catch (Exception ex)
             {
-                Core.Instance.Loggers.Log("[HistoryProvider] " + "Errore durante ExecuteAsync: " + ex.Message, LoggingLevel.Error);
+                AppLog.Error("HistoryProvider", "Execution", $"Errore durante ExecuteAsync: {ex.Message}");
                 return Task.CompletedTask;
             }
         }
@@ -219,7 +220,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 
         private void WaitForReady(int maxWaitMs)
         {
-            Core.Instance.Loggers.Log("[HistoryProvider] " + $"⏳ Attesa VolumeDataReady ({this._elapsedMs} ms)...", LoggingLevel.System);
+            AppLog.System("HistoryProvider", "WaitReady", $"Attesa VolumeDataReady ({this._elapsedMs} ms)...");
 
             this._elapsedMs = 0;
             while (!this.VolumeDataReady && !this.CancToken.IsCancellationRequested && _elapsedMs < maxWaitMs)
@@ -228,7 +229,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
                 _elapsedMs += _retryDelayMs;
             }
 
-            Core.Instance.Loggers.Log("[HistoryProvider] " + $"⏳Fine Attesa VolumeDataReady ({this._elapsedMs} ms)...", LoggingLevel.System);
+            AppLog.System("HistoryProvider", "WaitReady", $"Fine Attesa VolumeDataReady ({this._elapsedMs} ms)...");
 
         }
 
@@ -240,7 +241,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
                 this.VolumeAnalysisCompleted?.Invoke();
             }
 
-            Core.Instance.Loggers.Log("[HistoryProvider] ✅ VolumeDataReady ricevuto", LoggingLevel.System);
+            AppLog.System("HistoryProvider", "VolumeReady", "VolumeDataReady ricevuto");
 
         }
     }

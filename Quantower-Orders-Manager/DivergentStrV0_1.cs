@@ -106,16 +106,14 @@ namespace DivergentStrV0_1
         {
             try
             {
-                int lots = Math.Max(0, _lotMin + _lotStep);
                 double lotSize = this._Symbol != null ? this._Symbol.LotSize : 1.0;
-                double last = this._Symbol != null ? this._Symbol.Last : 0.0;
-                double value = lots * lotSize * last;
-                return $"({lots}) * {lotSize} * {last} = {value}";
+                double minLot = this._Symbol != null ? this._Symbol.MinLot : 0.0;
+                double value = this._Symbol != null ? this._Symbol.Last : -1;
+                return $"(Size) {lotSize}:(Min) {minLot}";
             }
             catch
             {
-                int lots = Math.Max(0, _lotMin + _lotStep);
-                return $"({lots}) * LotSize * Last";
+                return $"Data Are Missing";
             }
         }
         #endregion
@@ -178,12 +176,12 @@ namespace DivergentStrV0_1
         #region ====== Lifecycle ======
         protected override void OnCreated()
         {
-            Core.Instance.Loggers.Log("[Lifecycle] OnCreated", LoggingLevel.System);
+            AppLog.System("DivergentStr", "Lifecycle", "OnCreated");
         }
 
         protected override void OnRun()
         {
-            StrategyLogHub.Publish("DivergentStr", string.Format("OnRun entered | AppDomain: {0}", AppDomain.CurrentDomain.FriendlyName), LoggingLevel.System);
+            AppLog.System("DivergentStr", "Lifecycle", string.Format("OnRun entered | AppDomain: {0}", AppDomain.CurrentDomain.FriendlyName));
             //TODO: [DEBUG] Verify indicator catalog availability before creating instances.
             this.AtrIndicator = Core.Instance.Indicators.CreateIndicator(
                 Core.Instance.Indicators.All.FirstOrDefault(x => x.Name == "RVOL (evolved)"));
@@ -245,7 +243,9 @@ namespace DivergentStrV0_1
                 }
                 //TODO: [DEBUG] Ensure RowanStrategy dependencies are resolved prior to construction.
                 // Compute effective quantity: either direct value or lot-based
-                double lotQuantity = _useLotSystem ? Math.Max(0, (double)(_lotMin + _lotStep)) : 0;
+                double lotQuantity = _useLotSystem ? Math.Max(0, (double)(_lotMin + _lotStep*this._Symbol.LotStep)) : 0;
+                if (lotQuantity > 0 && lotQuantity < this._Symbol.MinLot)
+                    lotQuantity = this._Symbol.MinLot;
 
                 _strategy = new RowanStrategy(
                     this.DeltaIndicato,
@@ -301,37 +301,6 @@ namespace DivergentStrV0_1
         protected override void OnRemove()
         {
             //TODO: [DEBUG] Explicitly release remaining resources when removing the strategy.
-        }
-
-        protected override void OnSettingsUpdated()
-        {
-            base.OnSettingsUpdated();
-
-            try
-            {
-                // Refresh the computed descriptive string when dependent settings change
-                var settings = this.Settings;
-                if (settings != null)
-                {
-                    var lotStringItem = settings.FirstOrDefault(si => si.Text == "Lot Selection Base Asset");
-                    if (lotStringItem is SettingItemString s)
-                    {
-                        // Update only when lot-related settings actually change
-                        bool changed = (_lotMin != _lastLotMinPublished) || (_lotStep != _lastLotStepPublished) || (_useLotSystem != _lastUseLotSystemPublished);
-                        if (changed)
-                        {
-                            s.Value = ComputeLotSelectionBaseAsset();
-                            _lastLotMinPublished = _lotMin;
-                            _lastLotStepPublished = _lotStep;
-                            _lastUseLotSystemPublished = _useLotSystem;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Core.Instance.Loggers.Log($"OnSettingsUpdated (Lot string refresh) error: {ex.Message}", LoggingLevel.Error);
-            }
         }
 
 
@@ -533,13 +502,6 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility("Use Lot System", true)
                 });
 
-                // Descriptive string for base asset value
-                settings.Add(new SettingItemString("Lot Selection Base Asset", ComputeLotSelectionBaseAsset())
-                {
-                    Text = "Lot Selection Base Asset",
-                    SortIndex = 3016,
-                    Relation = new SettingItemRelationVisibility("Use Lot System", true)
-                });
                 #endregion
 
                 #region ===== 320x ï¿½ Entry Conditions =====
@@ -852,7 +814,7 @@ namespace DivergentStrV0_1
 
                             if (start == end)
                             {
-                                Core.Instance.Loggers.Log($"Warning: Session {i + 1} has same start and end time", LoggingLevel.Error);
+                                AppLog.Error("DivergentStr", "SessionValidation", $"Warning: Session {i + 1} has same start and end time");
                             }
 
                             List<DayOfWeek> activeDays = new List<DayOfWeek>();
@@ -871,7 +833,7 @@ namespace DivergentStrV0_1
                         DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
                         DayOfWeek.Thursday, DayOfWeek.Friday
                     });
-                                Core.Instance.Loggers.Log($"Session {i + 1}: No days selected, defaulting to weekdays", LoggingLevel.Error);
+                                AppLog.Error("DivergentStr", "SessionValidation", $"Session {i + 1}: No days selected, defaulting to weekdays");
                             }
 
                             _sessionDays[i] = activeDays;
@@ -879,7 +841,7 @@ namespace DivergentStrV0_1
                         }
                         catch (Exception ex)
                         {
-                            Core.Instance.Loggers.Log($"Error creating session {i + 1}: {ex.Message}", LoggingLevel.Error);
+                            AppLog.Error("DivergentStr", "SessionCreation", $"Error creating session {i + 1}: {ex.Message}");
                         }
                     }
 
@@ -926,19 +888,6 @@ namespace DivergentStrV0_1
 
                     if (value.TryGetValue("Lot Step", out int lotStep))
                         _lotStep = Math.Max(0, lotStep);
-
-                    // Refresh the descriptive string right after lot values change
-                    try
-                    {
-                        var settingsNow = this.Settings;
-                        if (settingsNow != null)
-                        {
-                            var lotStringItem = settingsNow.FirstOrDefault(si => si.Text == "Lot Selection Base Asset");
-                            if (lotStringItem is SettingItemString s)
-                                s.Value = ComputeLotSelectionBaseAsset();
-                        }
-                    }
-                    catch { }
 
                     // ===== Entry Conditions =====
                     if (value.TryGetValue("Entry: Min Conditions", out int eMin))
@@ -1050,7 +999,7 @@ namespace DivergentStrV0_1
                 }
                 catch (Exception ex)
                 {
-                    Core.Instance.Loggers.Log($"Error updating settings: {ex.Message}", LoggingLevel.Error);
+                    AppLog.Error("DivergentStr", "Settings", $"Error updating settings: {ex.Message}");
 
                     // Reset a valori sicuri
                     _CustomSessionsCount = 0;
@@ -1091,13 +1040,9 @@ namespace DivergentStrV0_1
                 },
                 "$", "Exposure in base currency (USD)");
 
-            meter.CreateObservableGauge("DivergentStrV0_1_gross_pnl_usd",
-                () => _conditionable?.Metrics?.GrossProfit ?? 0,
-                "$", "Gross PnL (USD)");
-
             meter.CreateObservableGauge("DivergentStrV0_1_net_pnl_usd",
                 () => _conditionable?.Metrics?.NetProfit ?? 0,
-                "$", "Net PnL (USD)");
+                "$", "Gross PnL (USD)");
 
             meter.CreateObservableGauge("DivergentStrV0_1_trade_session_active_flag",
                 () => StaticSessionManager.CurrentStatus == Status.Active ? 1 : 0,
@@ -1109,45 +1054,35 @@ namespace DivergentStrV0_1
                 "flag", "Use Lot System Enabled (1/0)");
 
             meter.CreateObservableGauge("DivergentStrV0_1_lot_min",
-                () => (double)Math.Max(0, _lotMin),
-                "lots", "Configured Lot Minimum");
+                () => (double)Math.Max(0, this._Symbol.MinLot),
+                "lots", "Min Lot");
 
-            meter.CreateObservableGauge("DivergentStrV0_1_lot_step",
-                () => (double)Math.Max(0, _lotStep),
-                "lots", "Configured Lot Step");
-
-            meter.CreateObservableGauge("DivergentStrV0_1_lots_total",
-                () => (double)Math.Max(0, _lotMin + _lotStep),
-                "lots", "Total Lots (min + step)");
-
-            meter.CreateObservableGauge("DivergentStrV0_1_symbol_has_value_flag",
-                () => _Symbol != null ? 1 : 0,
-                "flag", "Symbol Provided (1/0)");
+            meter.CreateObservableGauge("DivergentStrV0_1_lot_min",
+                () => (double)Math.Max(0, this._Symbol.LotStep),
+                "lots", "Step Lot");
 
             meter.CreateObservableGauge("DivergentStrV0_1_symbol_lot_size",
-                () => {
-                    try { return _Symbol?.LotSize ?? 0.0; } catch { return 0.0; }
-                },
-                "units", "Symbol Lot Size");
+               () => {
+                   try { return _Symbol?.LotSize ?? 0.0; } catch { return 0.0; }
+               },
+               "units", "Symbol Lot Size");
 
-            meter.CreateObservableGauge("DivergentStrV0_1_symbol_last",
-                () => {
-                    try { return _Symbol?.Last ?? 0.0; } catch { return 0.0; }
-                },
-                "$", "Symbol Last Price");
+            meter.CreateObservableGauge("DivergentStrV0_1_lots_total",
+                () => (double)Math.Max(0, _lotMin + _lotStep*this._Symbol.LotStep),
+                "lots", "Total Lots");
+
 
             meter.CreateObservableGauge("DivergentStrV0_1_lot_selection_value",
                 () => {
                     try
                     {
-                        int lots = Math.Max(0, _lotMin + _lotStep);
+                        double lots = Math.Max(0.0, _lotMin + _lotStep*this._Symbol.LotStep);
                         double lotSize = _Symbol?.LotSize ?? 0.0;
-                        double last = _Symbol?.Last ?? 0.0;
-                        return lots * lotSize * last;
+                        return lots * lotSize;
                     }
                     catch { return 0.0; }
                 },
-                "$", "Lot Selection Base Asset Value ((lots)*(lotSize)*(last))");
+                "$", "Asset Size");
         }
         #endregion
     }

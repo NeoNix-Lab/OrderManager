@@ -1,4 +1,5 @@
-﻿using System;
+using DivergentStrV0_1.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
@@ -96,7 +97,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
                         }
                         catch (Exception ex)
                         {
-                            Core.Instance.Loggers.Log("[TpSlPositionManager] " + $"Errore nel settare l'entry order per l'item {this._itemsDictionary.Keys.Last()}: {ex.Message}", LoggingLevel.Error);
+                            AppLog.Error("TpSlPositionManager", "EntryOrder", $"Errore nel settare l'entry order per l'item {this._itemsDictionary.Keys.Last()}: {ex.Message}");
                             throw;
                         }
                     }
@@ -159,13 +160,13 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
             var result = Core.Instance.PlaceOrder(orderobj);
 
             if ( result.Status == TradingOperationResultStatus.Success)
-                Core.Instance.Loggers.Log("[TpSlPositionManager] " + $"✅ Entry order placed successfully with comment: {orderobj.Comment}", LoggingLevel.System);
+                AppLog.System("TpSlPositionManager", "EntryOrder", $"Entry order placed successfully with comment: {orderobj.Comment}");
             else
-                Core.Instance.Loggers.Log("[TpSlPositionManager] " + $"❌ Failed to place entry order with comment: {orderobj.Comment}. Reason: {result.Message}", LoggingLevel.Error);
+                AppLog.Error("TpSlPositionManager", "EntryOrder", $"Failed to place entry order with comment: {orderobj.Comment}. Reason: {result.Message}");
 
             if (!this._isInitialized)
             {
-                Core.Instance.Loggers.Log("[TpSlPositionManager] TpSlPositionManager is not initialized.", LoggingLevel.Error);
+                AppLog.Error("TpSlPositionManager", "Initialization", "TpSlPositionManager is not initialized.");
                 return;
             }
         }
@@ -185,7 +186,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
             }
             catch (Exception)
             {
-                Core.Instance.Loggers.Log("[TpSlPositionManager] " + $"Errore nel settare la posizione per l'item {pos.Comment}", LoggingLevel.Error);
+                AppLog.Error("TpSlPositionManager", "PositionSetup", $"Errore nel settare la posizione per l'item {pos.Comment}");
                 throw;
             }
         }
@@ -233,11 +234,11 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
             {
                 base.CreateItem(comment);
                 this.Items.Last().ItemClosed += this.TpSlPositionManager_ItemClosed;
-                Core.Instance.Loggers.Log("[TpSlPositionManager] " + $"✅ Creato nuovo SlTpItems con ID: {comment}", LoggingLevel.System);
+                AppLog.System("TpSlPositionManager", "ItemLifecycle", $"Creato nuovo SlTpItems con ID: {comment}");
             }
             else
             {
-                Core.Instance.Loggers.Log("[TpSlPositionManager] " + $"⚠️ Item con ID {comment} già esistente, non ricreato.", LoggingLevel.Error);
+                AppLog.Error("TpSlPositionManager", "ItemLifecycle", $"Item with ID {comment} already exists; skipped recreation.");
             }
         }
 
@@ -249,7 +250,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
                 item.ItemClosed -= this.TpSlPositionManager_ItemClosed;
                 this.Items.Remove(item);
                 this.ClosedItems.Add(item);
-                Core.Instance.Loggers.Log("[TpSlPositionManager] " + $"✅ Item con ID {item.Id} chiuso e spostato in ClosedItems.", LoggingLevel.System);
+                AppLog.System("TpSlPositionManager", "ItemLifecycle", $"Item con ID {item.Id} chiuso e spostato in ClosedItems.");
             }
 
         }

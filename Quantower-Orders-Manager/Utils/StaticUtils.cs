@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System;
 using TradingPlatform.BusinessLayer;
@@ -43,7 +43,7 @@ namespace DivergentStrV0_1.Utils
             }
             catch (Exception ex)
             {
-                Core.Instance.Loggers.Log(ex.Message, LoggingLevel.Error);
+                AppLog.Error("StaticUtils", "IndicatorGeneration", ex.Message);
                 //StrategyLogHub.Forward("StaticUtils", "Indicator Generation Failed", loggingLevel: LoggingLevel.Error);
                 //StrategyLogHub.Forward("StaticUtils", $"Failed with message : {ex.Message}", loggingLevel: LoggingLevel.Error);
             }
@@ -101,37 +101,66 @@ namespace DivergentStrV0_1.Utils
 
         public static class OffMarketUtc
     {
-        // 🔧 IMPOSTA QUI I TUOI ORARI UTC (già convertiti a monte)
-        // Esempio EDT: 21:00–22:00 e weekend Fri 21:00 → Sun 22:00
-        // Esempio EST: 22:00–23:00 e weekend Fri 22:00 → Sun 23:00
-        public static TimeOnly DailyCloseStartUtc = new(21, 0);
-        public static TimeOnly DailyCloseEndUtc = new(22, 0);
-        public static TimeOnly WeekendFriStartUtc = new(21, 0);
-        public static TimeOnly WeekendSunEndUtc = new(22, 0);
+        // Costruiamo le 3 sessioni TARGET richieste, convertendo orari EST in UTC:
+        // 1) Regular (prev day)    09:30–17:00 EST
+        // 2) Overnight (prev→curr) 18:00–04:00 EST (overnight)
+        // 3) Morning (curr day)    04:00–09:29 EST
+        // Nota: usiamo il timezone Windows "Eastern Standard Time" per gestire automaticamente DST.
+
+        private static readonly TimeZoneInfo EasternTZ = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+
+        private static TimeOnly EstLocalToUtcTimeOnly(int hour, int minute)
+        {
+            // Usiamo la data corrente (UTC) solo per ricavare la conversione stagionale (DST vs standard)
+            // Il risultato è l'orario UTC corrispondente per l'odierna stagione.
+            DateTime todayEst = TimeZoneInfo.ConvertTime(DateTime.UtcNow, EasternTZ);
+            var estLocal = new DateTime(todayEst.Year, todayEst.Month, todayEst.Day, hour, minute, 0, DateTimeKind.Unspecified);
+            var estWithZone = DateTime.SpecifyKind(estLocal, DateTimeKind.Unspecified);
+            DateTime utc = TimeZoneInfo.ConvertTimeToUtc(estWithZone, EasternTZ);
+            return TimeOnly.FromDateTime(utc);
+        }
 
         public static List<SimpleSessionUtc> Build()
         {
-            var list = new List<SimpleSessionUtc>();
+            // Calcolo orari UTC risultanti dalla conversione EST→UTC (sensibile al DST attuale)
+            var regularOpenUtc = EstLocalToUtcTimeOnly(9, 30);
+            var regularCloseUtc = EstLocalToUtcTimeOnly(17, 0);
 
-            // Daily close (Mon–Thu) — evita sovrapposizione col blocco weekend
-            list.Add(new SimpleSessionUtc("DailyClose Mon-Thu (UTC)",
-                new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday },
-                DailyCloseStartUtc, DailyCloseEndUtc));
+            var overnightOpenUtc = EstLocalToUtcTimeOnly(18, 0);
+            var overnightCloseUtc = EstLocalToUtcTimeOnly(4, 0); // overnight → Close <= Open in UTC in molti periodi
 
-            // Weekend spezzato (aderente a SimpleSessionUtc, tutto in UTC)
-            list.Add(new SimpleSessionUtc("Weekend Fri (UTC)",
-                new[] { DayOfWeek.Friday },
-                WeekendFriStartUtc, new TimeOnly(0, 0)));     // ven start → sab 00:00
+            var morningOpenUtc = EstLocalToUtcTimeOnly(4, 0);
+            var morningCloseUtc = EstLocalToUtcTimeOnly(9, 29);
 
-            list.Add(new SimpleSessionUtc("Weekend Sat (UTC)",
-                new[] { DayOfWeek.Saturday },
-                new TimeOnly(0, 0), new TimeOnly(0, 0)));     // sab full-day (00:00→00:00)
+            var sessions = new List<SimpleSessionUtc>
+            {
+                // Regular session (prev day 09:30–17:00 EST)
+                new SimpleSessionUtc(
+                    name: "REGULAR (UTC)",
+                    days: new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday },
+                    openUtc: regularOpenUtc,
+                    closeUtc: regularCloseUtc
+                ),
 
-            list.Add(new SimpleSessionUtc("Weekend Sun (UTC)",
-                new[] { DayOfWeek.Sunday },
-                new TimeOnly(0, 0), WeekendSunEndUtc));       // dom 00:00 → end
+                // Overnight session (prev 18:00 EST → curr 04:00 EST)
+                // Valida da Domenica a Giovedì (apre la sera e chiude la mattina successiva)
+                new SimpleSessionUtc(
+                    name: "OVERNIGHT (UTC)",
+                    days: new[] { DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday },
+                    openUtc: overnightOpenUtc,
+                    closeUtc: overnightCloseUtc
+                ),
 
-            return list;
+                // Morning session (curr day 04:00–09:29 EST)
+                new SimpleSessionUtc(
+                    name: "MORNING (UTC)",
+                    days: new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday },
+                    openUtc: morningOpenUtc,
+                    closeUtc: morningCloseUtc
+                )
+            };
+
+            return sessions;
         }
     }
 }

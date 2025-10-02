@@ -1,4 +1,5 @@
-﻿using System;
+using DivergentStrV0_1.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using TradingPlatform.BusinessLayer;
@@ -192,7 +193,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
 
             if (oldStatus != _status)
             {
-                Core.Instance.Loggers.Log("[TpSlItems2] " + $"PositionManager {Id} status changed to {_status}", LoggingLevel.Trading);
+                AppLog.Trading("TpSlItems2", "StatusChange", $"PositionManager {Id} status changed to {_status}");
                 if (_status == PositionManagerStatus.Closed)
                 {
                     ItemClosed?.Invoke(this, new PositionManagerStatus[2] { oldStatus, _status });
@@ -304,7 +305,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
         public void AttachTpOrder(Order order)
         {
             if (order.Side == Side)
-                Core.Instance.Loggers.Log("[TpSlItems2] " + $"Tentativo di aggiungere ordine TP con lato errato. Ordine ID: {order.Id}, Lato Ordine: {order.Side}, Lato Posizione: {this.Side}", LoggingLevel.Error);
+                AppLog.Error("TpSlItems2", "OrderValidation", $"Tentativo di aggiungere ordine TP con lato errato. Ordine ID: {order.Id}, Lato Ordine: {order.Side}, Lato Posizione: {this.Side}");
             else
                 TpOrders.Add(order);
 
@@ -313,7 +314,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
         public void AttachSlOrder(Order order)
         {
             if (order.Side == Side)
-                Core.Instance.Loggers.Log("[TpSlItems2] " + $"Tentativo di aggiungere ordine SL con lato errato. Ordine ID: {order.Id}, Lato Ordine: {order.Side}, Lato Posizione: {this.Side}", LoggingLevel.Error);
+                AppLog.Error("TpSlItems2", "OrderValidation", $"Tentativo di aggiungere ordine SL con lato errato. Ordine ID: {order.Id}, Lato Ordine: {order.Side}, Lato Posizione: {this.Side}");
             else
                 SlOrders.Add(order);
         }

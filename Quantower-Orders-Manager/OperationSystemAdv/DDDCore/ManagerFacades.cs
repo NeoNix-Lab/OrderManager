@@ -54,7 +54,7 @@ namespace DivergentStrV0_1.OperationSystemAdv.DDDCore
         public static IManagerFacade Create(ManagerType type)
         {
             if (type != ManagerType.PositionBased)
-                global::DivergentStrV0_1.Utils.AppLog.System("Managers", $"Requested {type}, using PositionBased manager.");
+                global::DivergentStrV0_1.Utils.AppLog.System("Managers", "Manager Creation", $"Requested {type}, using PositionBased manager.");
 
             return new PositionManagerFacade(new TpSlPositionManager());
         }

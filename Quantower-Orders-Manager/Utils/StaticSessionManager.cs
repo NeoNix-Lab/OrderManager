@@ -16,6 +16,7 @@ namespace DivergentStrV0_1.Utils
         public string Name { get; }
         public double High { get; }
         public double Low { get; }
+        public DayOfWeek Day{ get; set; }
 
         public TPLevelItem(string name, double high, double low)
         {
@@ -122,6 +123,9 @@ namespace DivergentStrV0_1.Utils
             }
         }
 
+
+        //🧠 HINT: [Dispose Called]
+
         public static void Dispose()
         {
             foreach (var s in TargetSessions)
@@ -134,77 +138,88 @@ namespace DivergentStrV0_1.Utils
         }
 
         /// <summary>
-        /// Restituisce un TPLevelsDto con:
-        /// - 1 item "__PREV_DAY__" (High/Low del giorno precedente su DAY1)
-        /// - 1 item per ciascuna sessione in TargetSessions con High/Low del RANGE PRECEDENTE
-        ///   rispetto all'HistoricalData corrente (stesso Period di aggregazione).
+        /// Calcola i livelli TP usando le 3 sessioni TARGET (REGULAR/OVERNIGHT/MORNING) in un
+        /// rolling window di 24h rispetto all'ultimo item disponibile.
+        /// Pubblica esattamente 3 massimi più recenti e 3 minimi più recenti come 6 TPLevelItem:
+        /// - HIGH#1..#3 con Low = double.NaN
+        /// - LOW#1..#3 con High = double.NaN
         /// </summary>
         public static void CalculateTPLevels()
         {
-            HistoricalData currentHistoricalData = _dataProvider?.HistoricalData;
-            if (currentHistoricalData == null)
-                throw new ArgumentNullException(nameof(currentHistoricalData));
-            if (currentHistoricalData.Symbol == null)
+            HistoricalData hd = _dataProvider?.HistoricalData;
+            if (hd == null)
+                throw new ArgumentNullException(nameof(hd));
+            if (hd.Symbol == null)
                 throw new InvalidOperationException("HistoricalData.Symbol is null.");
 
-            var symbol = currentHistoricalData.Symbol;
-            var items = new List<TPLevelItem>();
+            // Richiede aggregazione time-based
+            if (hd.Aggregation is not HistoryAggregationTime agg)
+                throw new InvalidOperationException("Expected time-based aggregation for TP levels.");
 
-            // --- Prev day (DAY1) ---
+            var period = agg.Period;
+            var symbol = hd.Symbol;
+
+            // Finestra di riferimento [windowStart, now]
+            DateTime nowUtc = EnsureUtc(hd[0].TimeLeft);
+
+            // Raccogliamo le finestre di sessione che INTERSECANO la rolling window.
+            // Basteranno pochi giorni intorno a now (fino a 3 giorni per sicurezza).
+            var windows = new List<(DateTime Start, DateTime End, string Name, double High, double Low)>();
+
+            foreach (var sess in TargetSessions)
             {
-                DateTime toTime = currentHistoricalData[0].TimeLeft;
+                if (sess == null) continue;
 
-                TimeSpan span = toTime - currentHistoricalData.FromTime;
-
-                if (span.TotalDays < 2)
+                // Itera su 3 giorni: oggi, ieri, l'altro ieri
+                for (int d = 0; d <= 2; d++)
                 {
-                    Core.Instance.Loggers.Log("[SessionManager] HistoricalData range too small to calculate PrevDay.", LoggingLevel.Error);
-                    throw new InvalidOperationException("HistoricalData range too small to calculate PrevDay.");
-                }
+                    var day = DateOnly.FromDateTime(nowUtc).AddDays(-d);
+                    var maybe = sess.WindowForDayUtc(day);
+                    if (maybe is null) continue;
+                    var (startUtc, endUtc) = maybe.Value;
 
-                DateTime tempTime = toTime.AddDays(-3);
-                DateTime fromTime = tempTime >= currentHistoricalData.FromTime ? tempTime : currentHistoricalData.FromTime;
-                var hdDay = symbol.GetHistory(Period.DAY1, fromTime);
-                try
-                {
-                    // hdDay[1] = giorno precedente (assumendo [0] = corrente o ultimo disponibile)
-                    double prevHigh = hdDay[1][PriceType.High];
-                    double prevLow = hdDay[1][PriceType.Low];
-                    items.Add(new TPLevelItem("__PREV_DAY__", prevHigh, prevLow));
-                }
-                finally { hdDay?.Dispose(); }
-            }
+                    var rangeEnd = endUtc > nowUtc ? nowUtc : endUtc;
 
-            // --- Target sessions (range PRECEDENTE) --- TODO : calcoliamo erroneamente i tp per sessioni passate durante la settimana 
-            if (TargetSessions.Count > 0)
-            {
-                var agg = (HistoryAggregationTime)currentHistoricalData.Aggregation;
-                var period = agg.Period;
-
-                foreach (var sess in TargetSessions)
-                {
-                    if (sess == null) continue;
-
-                    var prev = sess.GetPreviousSessionRangeUtc(currentHistoricalData);
-                    if (prev is { } rng)
+                    try
                     {
-                        var (startUtc, endUtc) = rng;
-                        var h = symbol.GetHistory(period, startUtc, endUtc);
-                        try
+                        using var h = symbol.GetHistory(period, startUtc, rangeEnd);
+                        if (h != null && h.Count > 0)
                         {
-                            items.Add(new TPLevelItem(
-                                sess.Name ?? "UNNAMED",
-                                h.High(),
-                                h.Low()
-                            ));
+                            double hi = h.High();
+                            double lo = h.Low();
+                            
+                            if (sess.Days.Contains(rangeEnd.DayOfWeek))
+                                windows.Add((startUtc, endUtc, sess.Name ?? "UNNAMED", hi, lo));
                         }
-                        finally { h?.Dispose(); }
                     }
-                    // Se non esiste range precedente → niente item per quella sessione
+                    catch (Exception ex)
+                    {
+                        AppLog.Error("SessionManager", "TPLevelHistory", $"History fetch failed for {sess.Name} {startUtc:o}-{rangeEnd:o}", ex);
+                    }
                 }
             }
-            
-            TpLevels = new TPLevelsDto(items);
+
+            // Ordina per fine finestra (più recente prima)
+            var ordered = windows
+                .OrderByDescending(w => w.End)
+                .ToList();
+
+            // Seleziona 3 HIGH più recenti e 3 LOW più recenti
+            var Items = new List<TPLevelItem>();
+
+            foreach (var w in ordered)
+            {
+                if (Items.Count < 3 && !double.IsNaN(w.High) && !double.IsInfinity(w.High))
+                    Items.Add(new TPLevelItem($"HIGH {w.Name} {w.End:yyyy-MM-dd}", w.High, w.Low));
+                
+                if (Items.Count >= 3)
+                    break;
+            }
+
+            TpLevels = new TPLevelsDto(Items);
         }
+
+        private static DateTime EnsureUtc(DateTime dt) =>
+            dt.Kind == DateTimeKind.Utc ? dt : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
     }
 }
