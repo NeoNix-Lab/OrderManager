@@ -1,4 +1,4 @@
-using DivergentStrV0_1.OperationSystemAdv;
+﻿using DivergentStrV0_1.OperationSystemAdv;
 using DivergentStrV0_1.OperationSystemAdv.DDDCore;
 using DivergentStrV0_1.Utils;
 using System;
@@ -27,6 +27,14 @@ namespace DivergentStrV0_1.Strategies
         Unknown
     }
 
+    internal enum InternalExpositionSide
+    {
+        Long,
+        Short,
+        Both,
+        Unexposed
+    }
+
     internal class RowanStrategy : ConditionableBase<SlTpData>
     {
 
@@ -49,6 +57,8 @@ namespace DivergentStrV0_1.Strategies
         private readonly List<string> _entryLineNames = new List<string>();
         private readonly List<string> _exitLineNames = new List<string>();
         private double _lotQuantity;
+        private InternalExpositionSide ExposeSide = InternalExpositionSide.Unexposed;
+        private int ExposedCount = 0;
 
         public bool AllowToTrade
         {
@@ -275,9 +285,9 @@ namespace DivergentStrV0_1.Strategies
                 TradeSignal exit_signal = this.CalculateTradeSignal(false);
                 TradeAction action = TradeAction.Wait;
 
-                switch (this.Metrics.ExposedSide)
+                switch (this.ExposeSide)
                 {
-                    case ExpositionSide.Long:
+                    case InternalExpositionSide.Long:
                         if (exit_signal == TradeSignal.CloseLong && entry_signal != TradeSignal.OpenSell)
                             action = TradeAction.Close;
                         else if (entry_signal == TradeSignal.OpenSell)
@@ -287,7 +297,7 @@ namespace DivergentStrV0_1.Strategies
                         else 
                             action = TradeAction.Wait;
                         break;
-                    case ExpositionSide.Short:
+                    case InternalExpositionSide.Short:
                         if (exit_signal == TradeSignal.CloseSell && entry_signal != TradeSignal.OpenBuy)
                             action = TradeAction.Close;
                         else if (entry_signal == TradeSignal.OpenBuy)
@@ -297,11 +307,11 @@ namespace DivergentStrV0_1.Strategies
                         else
                             action = TradeAction.Wait;
                         break;
-                    case ExpositionSide.Both:
+                    case InternalExpositionSide.Both:
                         AppLog.Error("RowanStrategy", "ExposureCheck", "Exposed on Both Sides positions");
                         this.ForceClosePositions(5);
                         break;
-                    case ExpositionSide.Unexposed:
+                    case InternalExpositionSide.Unexposed:
                         if (entry_signal == TradeSignal.OpenBuy)
                             action = TradeAction.Buy;
                         else if (entry_signal == TradeSignal.OpenSell)
@@ -319,7 +329,7 @@ namespace DivergentStrV0_1.Strategies
 
                 if (action == TradeAction.Buy || action == TradeAction.Sell)
                 {
-                    if (this.Metrics.ExposedAmount >= _maxOpen * this.Quantity)
+                    if (ExposedCount >= this._maxOpen)
                     {
                         AppLog.Trading("RowanStrategy", "TradeSignal", $"AVOIDED DUE MAX EXPO REACHED");
                         AppLog.Trading("RowanStrategy", "TradeSignalContext", $"EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
@@ -332,12 +342,16 @@ namespace DivergentStrV0_1.Strategies
                     {
                         if (action == TradeAction.Buy)
                         {
+                            this.ExposeSide = InternalExpositionSide.Long;
+                            this.ExposedCount++;
                             marketData.SlTriggerPrice = this.HistoryProvider.HistoricalData[1][PriceType.Low];
                             this.ComputeTradeAction(marketData, Side.Buy);
 
                         }
                         else if (action == TradeAction.Sell)
                         {
+                            this.ExposeSide = InternalExpositionSide.Short;
+                            this.ExposedCount++;
                             marketData.SlTriggerPrice = this.HistoryProvider.HistoricalData[1][PriceType.High];
                             this.ComputeTradeAction(marketData, Side.Sell);
                         }
@@ -352,6 +366,8 @@ namespace DivergentStrV0_1.Strategies
                 if (action == TradeAction.Close)
                 {
                     bool res = this.ForceClosePositions(5);
+                    this.ExposeSide = InternalExpositionSide.Unexposed;
+                    this.ExposedCount = 0;
 
                     if (res)
                     {
@@ -380,6 +396,10 @@ namespace DivergentStrV0_1.Strategies
                         marketData.SlTriggerPrice = entry_signal == TradeSignal.OpenBuy ?
                             this.HistoryProvider.HistoricalData[1][PriceType.Low] : this.HistoryProvider.HistoricalData[1][PriceType.High];
 
+                        this.ExposeSide = entry_signal == TradeSignal.OpenBuy ? InternalExpositionSide.Long : InternalExpositionSide.Short;
+
+                        this.ExposedCount = 1;
+
                         AppLog.Trading("RowanStrategy", "TradeSignal", $"ALL POSITIONS CLOSED FOR REVERSAL EntrySignal={entry_signal}, ExitSignal={exit_signal}, Action={action}");
                         foreach (var logsitem in this._logsEntry)
                             AppLog.Trading("RowanStrategy", "EntryDetails", $"Entry Details: {logsitem}");
@@ -401,7 +421,7 @@ namespace DivergentStrV0_1.Strategies
                     {
                         //TODO: [DEBUG] Track SL/TP adjustments for consistency with live positions
 
-                        //?? HINT: [Non agiamo su segnali differenti]
+                        //🧠 HINT: [Non agiamo su segnali differenti]
 
                         this.UpdateSlTp(marketData, isSl: true);
 
