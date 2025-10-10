@@ -204,7 +204,7 @@ namespace DivergentStrV0_1
             //TODO: [DEBUG] Cross-check Delta indicator configuration against UI state.
             this.DeltaIndicato.Settings = new List<SettingItem>
             {
-                new SettingItemBoolean("Force Volume Ready", _uiForceVolumeReady),
+                new SettingItemBoolean("Force Volume Ready", true),
                 new SettingItemBoolean("Delta: Use Median", _uiDeltaUseMedian),
                 new SettingItemInteger("Delta: Lookback", _uiDeltaLookback),
                 new SettingItemDouble("Delta: Threshold Multiplier", _uiDeltaThresholdMult),
