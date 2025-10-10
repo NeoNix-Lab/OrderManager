@@ -23,6 +23,6 @@
       <HintPath>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\bin\TradingPlatform.BusinessLayer.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <ProjectReference Include="..\..\..\RowanBridge\RowanBridge.csproj" />
+    <ProjectReference Include="..\RowanBridge\RowanBridge.csproj" />
   </ItemGroup>
 </Project>
