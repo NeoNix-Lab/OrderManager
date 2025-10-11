@@ -73,6 +73,7 @@ namespace DivergentStrV0_1
         private double _minTpInTicks = 20.0;
         private double _maxTpInTicks = 1000.0;
         private bool _debugMode = false;
+        private bool _useBridgeLogging = false;
         private int _maxOpen = 3;
         private double _maxSessionLossUsd = 100.0;
         private int _verbosityFrequency = 3;
@@ -133,6 +134,9 @@ namespace DivergentStrV0_1
 
         [InputParameter("Period", 4)]
         public Period _period = Period.MIN1;
+
+        [InputParameter("Use Bridge Logging", 5)]
+        public bool _useBridgeLoggingInput = false;
         #endregion
 
         #region ====== Runtime State ======
@@ -181,6 +185,9 @@ namespace DivergentStrV0_1
 
         protected override void OnRun()
         {
+            _useBridgeLogging = _useBridgeLoggingInput;
+            AppLog.UseBridgeLogging = _useBridgeLogging;
+
             AppLog.System("DivergentStr", "Lifecycle", string.Format("OnRun entered | AppDomain: {0}", AppDomain.CurrentDomain.FriendlyName));
             //TODO: [DEBUG] Verify indicator catalog availability before creating instances.
             this.AtrIndicator = Core.Instance.Indicators.CreateIndicator(
