@@ -16,7 +16,7 @@
     <OutputPath>A:\Quantower2\Quantower\TradingPlatform\v1.144.9\..\..\Settings\Scripts\plug-ins\GDIRender</OutputPath>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\RowanBridge\RowanBridge.csproj" />
+    <ProjectReference Include="..\..\RowanBridge\RowanBridge.csproj" />
   </ItemGroup>
 
   <ItemGroup>

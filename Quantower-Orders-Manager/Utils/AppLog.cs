@@ -54,7 +54,6 @@ namespace DivergentStrV0_1.Utils
         {
             LoggingLevel.Error => NotificationLevel.Error,
             LoggingLevel.Trading => NotificationLevel.Success,
-            LoggingLevel.Debug => NotificationLevel.Debug,
             _ => NotificationLevel.Info
         };
 
