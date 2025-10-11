@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 namespace RowanBridge;
 
@@ -12,6 +13,9 @@ public sealed class RowanBridgeHub
     private readonly object _sync = new();
     private RowanStrategySnapshot _snapshot = RowanStrategySnapshot.Empty;
     private RowanSettings _settings = RowanSettings.Empty;
+    private int _notificationSubscriberCount;
+    private long _lastStatusChangeTicks;
+    private long _lastNotificationTicks;
 
     private RowanBridgeHub()
     {
@@ -26,6 +30,12 @@ public sealed class RowanBridgeHub
     public event EventHandler<RowanBridgeCommandEventArgs>? CommandRequested;
 
     public event EventHandler<RowanNotification>? NotificationPublished;
+
+    /// <summary>
+    /// Raised whenever notification subscribers change from 0 to 1 or vice versa.
+    /// The bool payload indicates whether at least one subscriber is currently active.
+    /// </summary>
+    public event EventHandler<bool>? NotificationSubscriptionChanged;
 
     public RowanStrategySnapshot CurrentSnapshot
     {
@@ -46,6 +56,26 @@ public sealed class RowanBridgeHub
             {
                 return _settings;
             }
+        }
+    }
+
+    public bool HasNotificationSubscribers => Volatile.Read(ref _notificationSubscriberCount) > 0;
+
+    public DateTime LastNotificationUtc
+    {
+        get
+        {
+            long ticks = Interlocked.Read(ref _lastNotificationTicks);
+            return ticks == 0 ? DateTime.MinValue : new DateTime(ticks, DateTimeKind.Utc);
+        }
+    }
+
+    public DateTime LastStatusChangeUtc
+    {
+        get
+        {
+            long ticks = Interlocked.Read(ref _lastStatusChangeTicks);
+            return ticks == 0 ? DateTime.MinValue : new DateTime(ticks, DateTimeKind.Utc);
         }
     }
 
@@ -88,6 +118,7 @@ public sealed class RowanBridgeHub
         if (notification == null)
             throw new ArgumentNullException(nameof(notification));
 
+        Interlocked.Exchange(ref _lastNotificationTicks, notification.TimestampUtc.Ticks);
         NotificationPublished?.Invoke(this, notification);
     }
 
@@ -114,13 +145,39 @@ public sealed class RowanBridgeHub
     public IDisposable SubscribeToNotifications(EventHandler<RowanNotification> handler)
     {
         NotificationPublished += handler ?? throw new ArgumentNullException(nameof(handler));
-        return new DisposableAction(() => NotificationPublished -= handler);
+        UpdateNotificationSubscriberCount(+1);
+        return new DisposableAction(() =>
+        {
+            NotificationPublished -= handler;
+            UpdateNotificationSubscriberCount(-1);
+        });
     }
 
     public IDisposable SubscribeToCommands(EventHandler<RowanBridgeCommandEventArgs> handler)
     {
         CommandRequested += handler ?? throw new ArgumentNullException(nameof(handler));
         return new DisposableAction(() => CommandRequested -= handler);
+    }
+
+    private void UpdateNotificationSubscriberCount(int delta)
+    {
+        int newValue = Interlocked.Add(ref _notificationSubscriberCount, delta);
+
+        if (newValue < 0)
+        {
+            Interlocked.Exchange(ref _notificationSubscriberCount, 0);
+            newValue = 0;
+        }
+
+        bool shouldRaise =
+            (delta > 0 && newValue == 1) ||
+            (delta < 0 && newValue == 0);
+
+        if (shouldRaise)
+        {
+            Interlocked.Exchange(ref _lastStatusChangeTicks, DateTime.UtcNow.Ticks);
+            NotificationSubscriptionChanged?.Invoke(this, newValue > 0);
+        }
     }
 }
 

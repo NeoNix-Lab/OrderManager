@@ -94,6 +94,8 @@ namespace GDIBasedPlugin
         private readonly LinkedList<UiLogEntry> logEntries = new();
         private const int MaxLogEntries = 250;
         private const int MaxLogVisible = 14;
+        private bool _bridgeConnected;
+        private DateTime _lastNotificationUtc = DateTime.MinValue;
 
         public GDIRenderer(IRenderingNativeControl native)
            : base(native)
@@ -540,6 +542,19 @@ namespace GDIBasedPlugin
             gr.FillRectangle(logHeaderBrush, headerRect);
             gr.DrawString("Log stream", tableHeaderFont, tableHeaderTextBrush, headerRect.X + 8, headerRect.Y + (headerRect.Height - tableHeaderFont.Height) / 2f);
 
+            string statusText = _bridgeConnected ? "Bridge: Connected" : "Bridge: Waiting...";
+            if (_lastNotificationUtc != DateTime.MinValue)
+            {
+                statusText += $" | Last: {_lastNotificationUtc.ToLocalTime():HH:mm:ss}";
+            }
+
+            using (SolidBrush statusBrush = new SolidBrush(_bridgeConnected ? Color.FromArgb(166, 227, 161) : Color.FromArgb(255, 201, 134)))
+            {
+                SizeF statusSize = gr.MeasureString(statusText, tableRowFont);
+                float statusX = Math.Max(logRect.X + 8, headerRect.Right - statusSize.Width - 8);
+                gr.DrawString(statusText, tableRowFont, statusBrush, statusX, headerRect.Y + (headerRect.Height - tableRowFont.Height) / 2f + 1);
+            }
+
             gr.DrawLine(logSeparatorPen, logRect.X, headerRect.Bottom, logRect.Right, headerRect.Bottom);
 
             UiLogEntry[] snapshot;
@@ -700,11 +715,34 @@ namespace GDIBasedPlugin
 
             lock (logSync)
             {
-                logEntries.AddLast(new UiLogEntry(notification.TimestampUtc, notification.Level, notification.Message));
+                _bridgeConnected = true;
+                _lastNotificationUtc = notification.TimestampUtc;
+                string combinedMessage = string.IsNullOrWhiteSpace(notification.Source)
+                    ? notification.Message
+                    : $"{notification.Source} {notification.Message}";
+                logEntries.AddLast(new UiLogEntry(notification.TimestampUtc, notification.Level, combinedMessage));
                 while (logEntries.Count > MaxLogEntries)
                     logEntries.RemoveFirst();
             }
 
+            RedrawBufferedGraphic();
+        }
+
+        public void UpdateBridgeConnection(bool isConnected)
+        {
+            if (_bridgeConnected == isConnected)
+                return;
+
+            _bridgeConnected = isConnected;
+            RedrawBufferedGraphic();
+        }
+
+        public void UpdateBridgeHeartbeat(DateTime timestampUtc)
+        {
+            if (timestampUtc == DateTime.MinValue)
+                return;
+
+            _lastNotificationUtc = timestampUtc;
             RedrawBufferedGraphic();
         }
     }

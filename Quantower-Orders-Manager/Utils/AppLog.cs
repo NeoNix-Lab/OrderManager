@@ -1,4 +1,5 @@
 using System;
+using RowanBridge;
 using TradingPlatform.BusinessLayer;
 
 namespace DivergentStrV0_1.Utils
@@ -21,10 +22,41 @@ namespace DivergentStrV0_1.Utils
         {
             var prefix = string.IsNullOrWhiteSpace(component) ? "General" : component.Trim();
             var tag = string.IsNullOrWhiteSpace(reason) ? "General" : reason.Trim();
+            var formattedMessage = $"[{prefix}][{tag}] {message}";
 
-            // Bridge forwarding will be added in subsequent iterations when UseBridgeLogging is honoured.
-            Core.Instance.Loggers.Log($"[{prefix}][{tag}] {message}", level);
+            bool loggedToBridge = false;
+
+            if (_useBridgeLogging)
+            {
+                try
+                {
+                    var hub = RowanBridgeHub.Instance;
+                    if (hub.HasNotificationSubscribers)
+                    {
+                        var notification = new RowanNotification(prefix, formattedMessage, MapLevel(level));
+                        hub.PublishNotification(notification);
+                        loggedToBridge = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Core.Instance.Loggers.Log($"[AppLog][BridgeError] {ex.Message}", LoggingLevel.Error);
+                }
+            }
+
+            if (!_useBridgeLogging || !loggedToBridge)
+            {
+                Core.Instance.Loggers.Log(formattedMessage, level);
+            }
         }
+
+        private static NotificationLevel MapLevel(LoggingLevel level) => level switch
+        {
+            LoggingLevel.Error => NotificationLevel.Error,
+            LoggingLevel.Trading => NotificationLevel.Success,
+            LoggingLevel.Debug => NotificationLevel.Debug,
+            _ => NotificationLevel.Info
+        };
 
         public static void Log(string component, string reason, string message, LoggingLevel level) => Write(component, reason, message, level);
         public static void Info(string component, string reason, string message) => Write(component, reason, message, LoggingLevel.System);

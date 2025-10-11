@@ -11,6 +11,7 @@ namespace GDIBasedPlugin
     {
         private GDIRenderer gdiRenderer;
         private IDisposable notificationSubscription;
+        private EventHandler<bool>? bridgeStatusHandler;
 
         /// <summary>
         /// Plugin meta information
@@ -50,7 +51,18 @@ namespace GDIBasedPlugin
             base.Initialize();
 
             this.gdiRenderer = new GDIRenderer(this.Window.CreateRenderingControl("GDIRenderer"));
-            notificationSubscription = RowanBridgeHub.Instance.SubscribeToNotifications(OnBridgeNotification);
+            var hub = RowanBridgeHub.Instance;
+            bridgeStatusHandler = (_, connected) =>
+            {
+                this.gdiRenderer?.UpdateBridgeConnection(connected);
+                if (connected)
+                    this.gdiRenderer?.UpdateBridgeHeartbeat(RowanBridgeHub.Instance.LastNotificationUtc);
+            };
+            hub.NotificationSubscriptionChanged += bridgeStatusHandler;
+            notificationSubscription = hub.SubscribeToNotifications(OnBridgeNotification);
+            this.gdiRenderer?.UpdateBridgeConnection(hub.HasNotificationSubscribers);
+            if (hub.LastNotificationUtc != DateTime.MinValue)
+                this.gdiRenderer?.UpdateBridgeHeartbeat(hub.LastNotificationUtc);
         }
 
         /// <summary>
@@ -68,9 +80,15 @@ namespace GDIBasedPlugin
         {
             notificationSubscription?.Dispose();
             notificationSubscription = null;
+            if (bridgeStatusHandler != null)
+            {
+                RowanBridgeHub.Instance.NotificationSubscriptionChanged -= bridgeStatusHandler;
+                bridgeStatusHandler = null;
+            }
 
             if (this.gdiRenderer != null)
             {
+                this.gdiRenderer.UpdateBridgeConnection(false);
                 this.gdiRenderer.Dispose();
                 this.gdiRenderer = null;
             }
@@ -115,4 +133,3 @@ namespace GDIBasedPlugin
         }
     }
 }
-
