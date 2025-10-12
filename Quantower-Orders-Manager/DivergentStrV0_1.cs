@@ -1,6 +1,7 @@
 using DivergentStrV0_1.OperationSystemAdv;
 using DivergentStrV0_1.Strategies;
 using DivergentStrV0_1.Utils;
+using RowanBridge;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
@@ -74,6 +75,7 @@ namespace DivergentStrV0_1
         private double _maxTpInTicks = 1000.0;
         private bool _debugMode = false;
         private bool _useBridgeLogging = false;
+        private StrategyLifecycleStatus _lifecycleStatus = StrategyLifecycleStatus.Unknown;
         private int _maxOpen = 3;
         private double _maxSessionLossUsd = 100.0;
         private int _verbosityFrequency = 3;
@@ -181,12 +183,18 @@ namespace DivergentStrV0_1
         protected override void OnCreated()
         {
             AppLog.System("DivergentStr", "Lifecycle", "OnCreated");
+            _lifecycleStatus = StrategyLifecycleStatus.Created;
+            PublishBridgeSettings();
+            PublishBridgeSnapshot("OnCreated");
         }
 
         protected override void OnRun()
         {
             _useBridgeLogging = _useBridgeLoggingInput;
             AppLog.UseBridgeLogging = _useBridgeLogging;
+            _lifecycleStatus = StrategyLifecycleStatus.Running;
+            PublishBridgeSettings();
+            PublishBridgeSnapshot("OnRun");
 
             AppLog.System("DivergentStr", "Lifecycle", string.Format("OnRun entered | AppDomain: {0}", AppDomain.CurrentDomain.FriendlyName));
             //TODO: [DEBUG] Verify indicator catalog availability before creating instances.
@@ -303,11 +311,15 @@ namespace DivergentStrV0_1
             //TODO: [DEBUG] Verify disposal pipeline releases indicator references.
             StaticSessionManager.Dispose();
             _conditionable?.Dispose();
+            _lifecycleStatus = StrategyLifecycleStatus.Stopped;
+            PublishBridgeSnapshot("OnStop");
         }
 
         protected override void OnRemove()
         {
             //TODO: [DEBUG] Explicitly release remaining resources when removing the strategy.
+            _lifecycleStatus = StrategyLifecycleStatus.Completed;
+            PublishBridgeSnapshot("OnRemove");
         }
 
 
@@ -1013,11 +1025,91 @@ namespace DivergentStrV0_1
                     _CustomSessions.Clear();
                     _sessionDays.Clear();
                 }
+                PublishBridgeSettings();
+                PublishBridgeSnapshot("SettingsUpdated");
             }
-
         }
 
 
+
+
+        private void PublishBridgeSnapshot(string context)
+        {
+            try
+            {
+                var hub = RowanBridgeHub.Instance;
+                double netProfit = _conditionable?.Metrics?.NetProfit ?? 0;
+                int openPositions = (int)Math.Max(0, Math.Round(_conditionable?.Metrics?.ExposedCount ?? 0));
+                int activeOrders = openPositions;
+
+                List<RowanMetric> metrics = new List<RowanMetric>();
+                var perf = _conditionable?.Metrics;
+                if (perf != null)
+                {
+                    metrics.Add(new RowanMetric("GrossProfit", perf.GrossProfit));
+                    metrics.Add(new RowanMetric("TradeCount", perf.TradeCount));
+                    metrics.Add(new RowanMetric("WinRatePct", perf.WinRate * 100.0, "%"));
+                    metrics.Add(new RowanMetric("MaxDrawdown", perf.MaxDrawdown));
+                }
+
+                var custom = new Dictionary<string, object?>
+                {
+                    ["Context"] = context,
+                    ["Symbol"] = _Symbol?.Name ?? string.Empty,
+                    ["Account"] = _Account?.Name ?? _Account?.Id,
+                    ["BridgeLogging"] = _useBridgeLogging,
+                    ["UseLotSystem"] = _useLotSystem,
+                    ["SessionStatus"] = StaticSessionManager.CurrentStatus.ToString(),
+                    ["AsyncMode"] = _inputDebugMode,
+                    ["Period"] = _period.ToString()
+                };
+
+                var snapshot = RowanStrategySnapshot.Create(
+                    DateTime.UtcNow,
+                    _lifecycleStatus,
+                    netProfit,
+                    activeOrders,
+                    openPositions,
+                    metrics,
+                    custom);
+
+                hub.PublishSnapshot(snapshot);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("DivergentStr", "BridgeSnapshot", $"Unable to publish snapshot: {ex.Message}");
+            }
+        }
+
+        private void PublishBridgeSettings()
+        {
+            try
+            {
+                var data = new Dictionary<string, object?>
+                {
+                    ["Quantity"] = _quantity,
+                    ["MinSlTicks"] = _minSlInTicks,
+                    ["MaxSlTicks"] = _maxSlInTicks,
+                    ["MinTpTicks"] = _minTpInTicks,
+                    ["MaxTpTicks"] = _maxTpInTicks,
+                    ["MaxOpenPositions"] = _maxOpen,
+                    ["MaxSessionLossUsd"] = _maxSessionLossUsd,
+                    ["UseLotSystem"] = _useLotSystem,
+                    ["LotMin"] = _lotMin,
+                    ["LotStep"] = _lotStep,
+                    ["VerboseFrequency"] = _verbosityFrequency,
+                    ["DeltaLookback"] = _uiDeltaLookback,
+                    ["DeltaThresholdMult"] = _uiDeltaThresholdMult,
+                    ["UseBridgeLogging"] = _useBridgeLogging
+                };
+
+                RowanBridgeHub.Instance.PublishSettings(RowanSettings.Create(data));
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("DivergentStr", "BridgeSettings", $"Unable to publish settings: {ex.Message}");
+            }
+        }
 
 
         protected override void OnInitializeMetrics(Meter meter)
@@ -1090,6 +1182,8 @@ namespace DivergentStrV0_1
                     catch { return 0.0; }
                 },
                 "$", "Asset Size");
+
+            PublishBridgeSnapshot("OnInitializeMetrics");
         }
         #endregion
     }

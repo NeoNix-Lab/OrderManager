@@ -12,6 +12,7 @@ namespace GDIBasedPlugin
         private GDIRenderer gdiRenderer;
         private IDisposable notificationSubscription;
         private EventHandler<bool>? bridgeStatusHandler;
+        private IDisposable snapshotSubscription;
 
         /// <summary>
         /// Plugin meta information
@@ -59,10 +60,13 @@ namespace GDIBasedPlugin
                     this.gdiRenderer?.UpdateBridgeHeartbeat(RowanBridgeHub.Instance.LastNotificationUtc);
             };
             hub.NotificationSubscriptionChanged += bridgeStatusHandler;
+            snapshotSubscription = hub.SubscribeToSnapshots(OnBridgeSnapshot);
             notificationSubscription = hub.SubscribeToNotifications(OnBridgeNotification);
             this.gdiRenderer?.UpdateBridgeConnection(hub.HasNotificationSubscribers);
             if (hub.LastNotificationUtc != DateTime.MinValue)
                 this.gdiRenderer?.UpdateBridgeHeartbeat(hub.LastNotificationUtc);
+            if (hub.CurrentSnapshot != RowanStrategySnapshot.Empty)
+                this.gdiRenderer?.UpdateSnapshot(hub.CurrentSnapshot);
         }
 
         /// <summary>
@@ -80,6 +84,8 @@ namespace GDIBasedPlugin
         {
             notificationSubscription?.Dispose();
             notificationSubscription = null;
+            snapshotSubscription?.Dispose();
+            snapshotSubscription = null;
             if (bridgeStatusHandler != null)
             {
                 RowanBridgeHub.Instance.NotificationSubscriptionChanged -= bridgeStatusHandler;
@@ -130,6 +136,11 @@ namespace GDIBasedPlugin
         private void OnBridgeNotification(object sender, RowanNotification notification)
         {
             this.gdiRenderer?.AddLogEntry(notification);
+        }
+
+        private void OnBridgeSnapshot(object sender, RowanStrategySnapshotChangedEventArgs e)
+        {
+            this.gdiRenderer?.UpdateSnapshot(e.Current);
         }
     }
 }

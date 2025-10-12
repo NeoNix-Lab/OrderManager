@@ -96,6 +96,10 @@ namespace GDIBasedPlugin
         private const int MaxLogVisible = 14;
         private bool _bridgeConnected;
         private DateTime _lastNotificationUtc = DateTime.MinValue;
+        private readonly object snapshotSync = new();
+        private RowanStrategySnapshot? _latestSnapshot;
+        private List<RowanMetric> _latestMetrics = new();
+        private IReadOnlyDictionary<string, object?> _latestCustomData = new Dictionary<string, object?>();
 
         public GDIRenderer(IRenderingNativeControl native)
            : base(native)
@@ -126,6 +130,7 @@ namespace GDIBasedPlugin
 
             const int padding = 14;
             const int menuHeight = 42;
+            const int statusHeight = 120;
             const int tableMenuHeight = 28;
             const int tableHeaderHeight = 28;
             const int tableRowHeight = 24;
@@ -133,15 +138,17 @@ namespace GDIBasedPlugin
             const int logSectionHeight = 180;
 
             int tableHeight = tableMenuHeight + tableHeaderHeight + tableRowHeight * visibleRows + padding;
-            int remainingHeight = bounds.Height - menuHeight - tableHeight - logSectionHeight - padding * 3;
+            int remainingHeight = bounds.Height - menuHeight - statusHeight - tableHeight - logSectionHeight - padding * 4;
             int chartHeight = Math.Max(remainingHeight, 120);
 
             Rectangle menuRect = new Rectangle(bounds.X, bounds.Y, bounds.Width, menuHeight);
-            Rectangle tableRect = new Rectangle(bounds.X + padding, menuRect.Bottom + padding, bounds.Width - padding * 2, tableHeight);
+            Rectangle statusRect = new Rectangle(bounds.X + padding, menuRect.Bottom + padding, bounds.Width - padding * 2, statusHeight);
+            Rectangle tableRect = new Rectangle(bounds.X + padding, statusRect.Bottom + padding, bounds.Width - padding * 2, tableHeight);
             Rectangle chartRect = new Rectangle(bounds.X + padding, tableRect.Bottom + padding, bounds.Width - padding * 2, chartHeight);
             Rectangle logRect = new Rectangle(bounds.X + padding, chartRect.Bottom + padding, bounds.Width - padding * 2, logSectionHeight);
 
             DrawMenu(gr, menuRect);
+            DrawStatusPanel(gr, statusRect);
             DrawOrdersTable(gr, tableRect, tableMenuHeight, tableHeaderHeight, tableRowHeight);
             DrawChart(gr, chartRect);
             DrawLogPanel(gr, logRect);
@@ -531,6 +538,91 @@ namespace GDIBasedPlugin
             gr.DrawString($"Theme: {theme?.Name ?? "Default"}", chartAxisFont, chartAxisTextBrush, chartRect.Right - 140, chartRect.Y + 6);
         }
 
+        private void DrawStatusPanel(Graphics gr, Rectangle statusRect)
+        {
+            if (statusRect.Width <= 0 || statusRect.Height <= 0)
+                return;
+
+            gr.FillRectangle(chartBackgroundBrush, statusRect);
+            Rectangle headerRect = new Rectangle(statusRect.X, statusRect.Y, statusRect.Width, 28);
+            gr.FillRectangle(tableMenuBrush, headerRect);
+
+            RowanStrategySnapshot? snapshot;
+            List<RowanMetric> metrics;
+            IReadOnlyDictionary<string, object?> customData;
+            lock (snapshotSync)
+            {
+                snapshot = _latestSnapshot;
+                metrics = _latestMetrics.ToList();
+                customData = _latestCustomData;
+            }
+
+            string headerStatus = snapshot != null
+                ? $"{snapshot.Lifecycle} @ {snapshot.TimestampUtc.ToLocalTime():HH:mm:ss}"
+                : "Awaiting snapshot...";
+            gr.DrawString("Strategy Snapshot", tableHeaderFont, tableHeaderTextBrush, headerRect.X + 8, headerRect.Y + (headerRect.Height - tableHeaderFont.Height) / 2f);
+
+            using (SolidBrush statusBrush = new SolidBrush(_bridgeConnected ? Color.FromArgb(166, 227, 161) : Color.FromArgb(255, 201, 134)))
+            {
+                SizeF statusSize = gr.MeasureString(headerStatus, tableRowFont);
+                float statusX = Math.Max(headerRect.X + 8, headerRect.Right - statusSize.Width - 8);
+                gr.DrawString(headerStatus, tableRowFont, statusBrush, statusX, headerRect.Y + (headerRect.Height - tableRowFont.Height) / 2f + 1);
+            }
+
+            Rectangle contentRect = new Rectangle(statusRect.X + 8, headerRect.Bottom + 6, statusRect.Width - 16, statusRect.Height - headerRect.Height - 12);
+
+            if (snapshot == null)
+            {
+                gr.DrawString("No data received yet from the strategy bridge.", tableRowFont, logTextBrush, contentRect.X, contentRect.Y);
+                return;
+            }
+
+            float lineHeight = tableRowFont.Height + 4;
+            float leftX = contentRect.X;
+            float rightX = contentRect.X + contentRect.Width / 2f;
+            float cursorLeft = contentRect.Y;
+            float cursorRight = contentRect.Y;
+
+            customData.TryGetValue("Symbol", out var symValue);
+            gr.DrawString($"Symbol: {symValue?.ToString() ?? "n/a"}", tableRowFont, logTextBrush, leftX, cursorLeft);
+            cursorLeft += lineHeight;
+
+            customData.TryGetValue("Account", out var accValue);
+            gr.DrawString($"Account: {accValue?.ToString() ?? "n/a"}", tableRowFont, logTextBrush, leftX, cursorLeft);
+            cursorLeft += lineHeight;
+
+            gr.DrawString($"Net PnL: {snapshot.NetProfit:F2} USD", tableRowFont, logTextBrush, leftX, cursorLeft);
+            cursorLeft += lineHeight;
+
+            gr.DrawString($"Lifecycle: {snapshot.Lifecycle}", tableRowFont, logTextBrush, leftX, cursorLeft);
+
+            gr.DrawString($"Active Orders: {snapshot.ActiveOrders}", tableRowFont, logTextBrush, rightX, cursorRight);
+            cursorRight += lineHeight;
+            gr.DrawString($"Open Positions: {snapshot.OpenPositions}", tableRowFont, logTextBrush, rightX, cursorRight);
+            cursorRight += lineHeight;
+            if (customData.TryGetValue("UseLotSystem", out var uls))
+            {
+                gr.DrawString($"Use Lot System: {uls}", tableRowFont, logTextBrush, rightX, cursorRight);
+                cursorRight += lineHeight;
+            }
+            gr.DrawString($"Bridge logging: {_bridgeConnected}", tableRowFont, logTextBrush, rightX, cursorRight);
+            cursorRight += lineHeight;
+
+            if (metrics.Count > 0)
+            {
+                float metricsY = Math.Max(cursorLeft, cursorRight) + lineHeight / 2f;
+                gr.DrawString("Key metrics:", tableRowFont, logTextBrush, leftX, metricsY);
+                metricsY += lineHeight;
+                foreach (var metric in metrics.Take(4))
+                {
+                    string unit = string.IsNullOrWhiteSpace(metric.Unit) ? string.Empty : metric.Unit;
+                    string formatted = unit == "%" ? $"{metric.Value:F2}{unit}" : $"{metric.Value:F2} {unit}".Trim();
+                    gr.DrawString($"• {metric.Name}: {formatted}", tableRowFont, logTextBrush, leftX, metricsY);
+                    metricsY += lineHeight;
+                }
+            }
+        }
+
         private void DrawLogPanel(Graphics gr, Rectangle logRect)
         {
             if (logRect.Width <= 0 || logRect.Height <= 0)
@@ -744,6 +836,24 @@ namespace GDIBasedPlugin
 
             _lastNotificationUtc = timestampUtc;
             RedrawBufferedGraphic();
+        }
+
+        public void UpdateSnapshot(RowanStrategySnapshot snapshot)
+        {
+            if (snapshot == null)
+                return;
+
+            lock (snapshotSync)
+            {
+                _latestSnapshot = snapshot;
+                _latestMetrics = snapshot.Metrics?.ToList() ?? new List<RowanMetric>();
+                _latestCustomData = snapshot.CustomData != null
+                    ? new Dictionary<string, object?>(snapshot.CustomData)
+                    : new Dictionary<string, object?>();
+            }
+
+            UpdateBridgeHeartbeat(snapshot.TimestampUtc);
+            UpdateBridgeConnection(true);
         }
     }
 }
