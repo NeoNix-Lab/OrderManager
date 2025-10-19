@@ -105,9 +105,9 @@ namespace DivergentStrV0_1
         #region ====== Snapshot Settings ======
         private string _uiSnapshotFileName = "snapshot";
         private bool _uiSnapshotSaveRequest = false;
-        private bool _uiSnapshotOpenFolderRequest = false;
         private string _uiSnapshotLoadFileName = string.Empty;
         private bool _uiSnapshotLoadRequest = false;
+        private string _uiSnapshotFolderPath = SnapshotDirectoryRoot;
         #endregion
 
         private static readonly string SnapshotExtension = ".json";
@@ -119,9 +119,9 @@ namespace DivergentStrV0_1
         {
             KEY_SNAPSHOT,
             nameof(_uiSnapshotSaveRequest),
-            nameof(_uiSnapshotOpenFolderRequest),
             nameof(_uiSnapshotLoadFileName),
-            nameof(_uiSnapshotLoadRequest)
+            nameof(_uiSnapshotLoadRequest),
+            nameof(_uiSnapshotFolderPath)
         };
 
         #region ====== Lot System Parameters ======
@@ -845,9 +845,9 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_SNAPSHOT, true)
                 });
 
-                settings.Add(new SettingItemBoolean(nameof(_uiSnapshotOpenFolderRequest), _uiSnapshotOpenFolderRequest)
+                settings.Add(new SettingItemString(nameof(_uiSnapshotFolderPath), _uiSnapshotFolderPath)
                 {
-                    Text = "Snapshot: Open snapshots folder",
+                    Text = "Snapshot: Directory path (read-only)",
                     SortIndex = 6003,
                     Relation = new SettingItemRelationVisibility(KEY_SNAPSHOT, true)
                 });
@@ -1102,8 +1102,8 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue(nameof(_uiSnapshotSaveRequest), out bool saveRequest))
                         _uiSnapshotSaveRequest = saveRequest;
 
-                    if (value.TryGetValue(nameof(_uiSnapshotOpenFolderRequest), out bool openFolder))
-                        _uiSnapshotOpenFolderRequest = openFolder;
+                    if (value.TryGetValue(nameof(_uiSnapshotFolderPath), out string folderPath))
+                        _uiSnapshotFolderPath = SnapshotDirectoryRoot;
 
                     if (value.TryGetValue(nameof(_uiSnapshotLoadFileName), out string loadName))
                         _uiSnapshotLoadFileName = SanitizeSnapshotName(loadName, allowEmpty: true);
@@ -1235,18 +1235,17 @@ namespace DivergentStrV0_1
                     UpdateSettingItemValue(nameof(_uiSnapshotLoadFileName), _uiSnapshotLoadFileName);
                 }
 
+                if (!string.Equals(_uiSnapshotFolderPath, SnapshotDirectoryRoot, StringComparison.Ordinal))
+                {
+                    _uiSnapshotFolderPath = SnapshotDirectoryRoot;
+                    UpdateSettingItemValue(nameof(_uiSnapshotFolderPath), _uiSnapshotFolderPath);
+                }
+
                 if (_uiSnapshotSaveRequest)
                 {
                     _uiSnapshotSaveRequest = false;
                     UpdateSettingItemValue(nameof(_uiSnapshotSaveRequest), false);
                     SaveSettingsSnapshot(_uiSnapshotFileName);
-                }
-
-                if (_uiSnapshotOpenFolderRequest)
-                {
-                    _uiSnapshotOpenFolderRequest = false;
-                    UpdateSettingItemValue(nameof(_uiSnapshotOpenFolderRequest), false);
-                    OpenSnapshotsFolder();
                 }
 
                 if (_uiSnapshotLoadRequest)
@@ -1339,25 +1338,6 @@ namespace DivergentStrV0_1
             catch (Exception ex)
             {
                 AppLog.Error("DivergentStr", "SnapshotLoad", $"Failed to load snapshot '{requestedName}': {ex.Message}");
-            }
-        }
-
-        private void OpenSnapshotsFolder()
-        {
-            try
-            {
-                string directory = EnsureSnapshotDirectory();
-                var psi = new ProcessStartInfo
-                {
-                    FileName = directory,
-                    UseShellExecute = true
-                };
-                Process.Start(psi);
-                AppLog.System("DivergentStr", "SnapshotFolder", $"Opened snapshots folder: {directory}");
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("DivergentStr", "SnapshotFolder", $"Failed to open snapshots folder: {ex.Message}");
             }
         }
 
