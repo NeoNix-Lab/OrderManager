@@ -15,6 +15,8 @@ namespace DivergentStrV0_1.Strategies
         public double SlTriggerPrice { get; set; }
         public double currentPrice { get; set; }
         public double AtrInTicks { get; set; }
+        public double PreviousLow { get; set; }
+        public double PreviousHigh { get; set; }
     }
 
     internal class RowanSlTpStrategy : ISlTpStrategy<SlTpData>
@@ -29,6 +31,7 @@ namespace DivergentStrV0_1.Strategies
         //TODO: [DEBUG] Keep ATR slippage multiplier inside [0,2] guardrails
         public double AtrSlippageMultiplier { get; set; } = 0.0;
         private int delta_InTicks;
+        public bool TrailToPreviousCandle { get; set; }
 
         public RowanSlTpStrategy(int min_Tick, int max_Tick)
         {
@@ -113,19 +116,49 @@ namespace DivergentStrV0_1.Strategies
 
         public Func<double, double> UpdateSl(SlTpData marketData, ITpSlItems item)
         {
+            if (marketData.Symbol == null || item == null)
+                return current_sl => current_sl;
 
             try
             {
+                if (this.TrailToPreviousCandle)
+                {
+                    const int safetyTicks = 2;
+
+                    return current_sl =>
+                    {
+                        double pivot = item.Side == Side.Buy ? marketData.PreviousLow : marketData.PreviousHigh;
+
+                        if (double.IsNaN(pivot) || pivot <= 0)
+                            return current_sl;
+
+                        if (item.Side == Side.Buy)
+                        {
+                            var guardPrice = marketData.Symbol.CalculatePrice(marketData.currentPrice, -safetyTicks);
+                            if (pivot >= guardPrice)
+                                return guardPrice;
+
+                            return pivot > current_sl ? pivot : current_sl;
+                        }
+                        else
+                        {
+                            var guardPrice = marketData.Symbol.CalculatePrice(marketData.currentPrice, safetyTicks);
+                            if (pivot <= guardPrice)
+                                return guardPrice;
+
+                            return pivot < current_sl ? pivot : current_sl;
+                        }
+                    };
+                }
+
                 return current_sl =>
                 {
-                    //TODO: [DEBUG] Replace placeholder delta check with candle-based recalculation
                     var delta = marketData.Symbol.CalculateTicks(current_sl, marketData.currentPrice);
                     bool isOut = delta > this.delta_InTicks;
 
                     if (!isOut)
                         return current_sl;
 
-                    //TODO: [DEBUG] Flesh out trailing branch coverage for all order states
                     return item.Side switch
                     {
                         Side.Buy => marketData.Symbol.CalculatePrice(marketData.currentPrice, -max_slInTicks),
@@ -136,8 +169,6 @@ namespace DivergentStrV0_1.Strategies
             }
             catch (Exception)
             {
-                //TODO: [DEBUG] Log SL update failures with contextual data
-                //TODO: [DEBUG] Decide fallback strategy when SL recalculation fails
                 return current_sl => current_sl;
             }
         }

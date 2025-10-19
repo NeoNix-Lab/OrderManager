@@ -275,11 +275,29 @@ namespace DivergentStrV0_1.Strategies
             //TODO: [DEBUG] Validate ATR-based slippage computation for entry price
 
             //TODO: [DEBUG] Double-check history index offsets when reading price levels
+            double prevLow = double.NaN;
+            double prevHigh = double.NaN;
+            try
+            {
+                if (this.HistoryProvider?.HistoricalData != null)
+                {
+                    prevLow = this.HistoryProvider.HistoricalData[1][PriceType.Low];
+                    prevHigh = this.HistoryProvider.HistoricalData[1][PriceType.High];
+                }
+            }
+            catch
+            {
+                prevLow = double.NaN;
+                prevHigh = double.NaN;
+            }
+
             SlTpData marketData = new SlTpData()
                 {
                     currentPrice = item[PriceType.Open],
                     Symbol = this.Symbol,
                     AtrInTicks = Math.Abs(this.Symbol.CalculateTicks(this._slipageAtrIndicator.GetValue()+ item[PriceType.Open], item[PriceType.Open])),
+                    PreviousLow = prevLow,
+                    PreviousHigh = prevHigh,
                 };
                 TradeSignal entry_signal = this.CalculateTradeSignal(true);
                 TradeSignal exit_signal = this.CalculateTradeSignal(false);

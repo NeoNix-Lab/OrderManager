@@ -42,6 +42,8 @@ namespace RovIndicator
         public bool _UseAtrScaledHma = false;
         [InputParameter("HMA Length (Pure)", 14, 2, 2000, 1)]
         public int _HmaLenPure = 14;
+        [InputParameter("Use Composite HMA for Direction", 15)]
+        public bool _UseCompositeHmaForDirection = false;
 
         // ATR settings
         [InputParameter("ATR Settings", 20)]
@@ -147,12 +149,13 @@ namespace RovIndicator
                 this.currentsmoothedRvol = (currentRvolS + currentRvolL + hmaCompositeUsed) / 3.0;
 
                 // Segnale HMA: −2 se close < HMA, +2 se close > HMA, 0 altrimenti
+                var directionHma = _UseCompositeHmaForDirection ? hmaCompositeUsed : hmaPureUsed;
                 int hmaDir = 0;
-                if (!double.IsNaN(hmaPureUsed))
+                if (!double.IsNaN(directionHma))
                 {
                     var close = this.HistoricalData[1][PriceType.Close];
-                    if (close > hmaPureUsed) hmaDir = 2;
-                    else if (close < hmaPureUsed) hmaDir = -2;
+                    if (close > directionHma) hmaDir = 2;
+                    else if (close < directionHma) hmaDir = -2;
                 }
                 SetValue(hmaDir, LINE_HMA_DIR);
             }

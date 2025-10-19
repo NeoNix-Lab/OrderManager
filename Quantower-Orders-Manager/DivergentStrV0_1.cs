@@ -42,6 +42,7 @@ namespace DivergentStrV0_1
         private int _uiHmaLenComposite = 14;
         private int _uiHmaLenPure = 14;
         private bool _uiUseAtrScaledHma = false;
+        private bool _uiUseCompositeHmaForDirection = false;
         #endregion
 
         #region ====== Delta Settings (UI) ======
@@ -72,6 +73,7 @@ namespace DivergentStrV0_1
         private double _maxSlInTicks = 500.0;
         private double _minTpInTicks = 20.0;
         private double _maxTpInTicks = 1000.0;
+        private bool _uiTrailStopToPrevCandle = false;
         private bool _debugMode = false;
         private int _maxOpen = 3;
         private double _maxSessionLossUsd = 100.0;
@@ -196,6 +198,7 @@ namespace DivergentStrV0_1
                 new SettingItemBoolean("Use Price for HMA", _uiHmaUsePrice),
                 new SettingItemInteger("HMA Length (Composite)", _uiHmaLenComposite),
                 new SettingItemInteger("HMA Length (Pure)", _uiHmaLenPure),
+                new SettingItemBoolean("Use Composite HMA for Direction", _uiUseCompositeHmaForDirection),
                 new SettingItemBoolean("Use ATR-scaled HMA", _uiUseAtrScaledHma),
                 new SettingItemInteger("ATR Length", _uiAtrLen),
                 new SettingItemBoolean("Use ATR Normalization", _uiAtrNormalize),
@@ -281,7 +284,8 @@ namespace DivergentStrV0_1
                 {
                     MinTpInTicks = (int)Math.Max(1, Math.Round(_minTpInTicks)),
                     MaxTpInTicks = (int)Math.Max(Math.Max(1, Math.Round(_minTpInTicks)), Math.Max(1, Math.Round(_maxTpInTicks))),
-                    AtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, _uiAtrSlippageMultiplier))
+                    AtrSlippageMultiplier = Math.Max(0.0, Math.Min(2.0, _uiAtrSlippageMultiplier)),
+                    TrailToPreviousCandle = _uiTrailStopToPrevCandle
                 });
 
                 _strategy.Init(req, _Account, _inputDebugMode, "", false);
@@ -409,10 +413,17 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
                 });
 
+                settings.Add(new SettingItemBoolean(nameof(_uiTrailStopToPrevCandle), _uiTrailStopToPrevCandle)
+                {
+                    Text = "SL: Trail to previous candle",
+                    SortIndex = 3005,
+                    Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
+                });
+
                 settings.Add(new SettingItemDouble("Min Tp In Ticks", _minTpInTicks)
                 {
                     Text = "Min TP In Ticks",
-                    SortIndex = 3005,
+                    SortIndex = 3006,
                     Minimum = 1,
                     Maximum = double.MaxValue,
                     Increment = 1,
@@ -422,7 +433,7 @@ namespace DivergentStrV0_1
                 settings.Add(new SettingItemDouble("Max Tp In Ticks", _maxTpInTicks)
                 {
                     Text = "Max TP In Ticks",
-                    SortIndex = 3006,
+                    SortIndex = 3007,
                     Minimum = 1,
                     Maximum = double.MaxValue,
                     Increment = 1,
@@ -432,7 +443,7 @@ namespace DivergentStrV0_1
                 settings.Add(new SettingItemInteger("Max Open Positions", _maxOpen)
                 {
                     Text = "Max Open Positions",
-                    SortIndex = 3006,
+                    SortIndex = 3008,
                     Minimum = 1,
                     Maximum = 100,
                     Relation = new SettingItemRelationVisibility(KEY_STRAT, true)
@@ -666,17 +677,24 @@ namespace DivergentStrV0_1
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
+                settings.Add(new SettingItemBoolean(nameof(_uiUseCompositeHmaForDirection), _uiUseCompositeHmaForDirection)
+                {
+                    Text = "Use Composite HMA for Direction",
+                    SortIndex = 4005,
+                    Relation = new SettingItemRelationVisibility(KEY_ATR, true)
+                });
+
                 settings.Add(new SettingItemBoolean(nameof(_uiAtrNormalize), _uiAtrNormalize)
                 {
                     Text = "Use ATR Normalization",
-                    SortIndex = 4005,
+                    SortIndex = 4006,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
 
                 settings.Add(new SettingItemDouble(nameof(_uiAtrSlopeThr), _uiAtrSlopeThr)
                 {
                     Text = "Slope Threshold (norm.)",
-                    SortIndex = 4006,
+                    SortIndex = 4007,
                     Minimum = 0.0,
                     Maximum = double.MaxValue,
                     DecimalPlaces = 1,
@@ -687,7 +705,7 @@ namespace DivergentStrV0_1
                 settings.Add(new SettingItemBoolean(nameof(_uiUseAtrScaledHma), _uiUseAtrScaledHma)
                 {
                     Text = "Use ATR-scaled HMA",
-                    SortIndex = 4007,
+                    SortIndex = 4008,
                     Relation = new SettingItemRelationVisibility(KEY_ATR, true)
                 });
                 #endregion
@@ -855,6 +873,9 @@ namespace DivergentStrV0_1
                     if (value.TryGetValue("Max SL In Ticks", out double maxSl))
                         _maxSlInTicks = Math.Max(_minSlInTicks, maxSl);
 
+                    if (value.TryGetValue(nameof(_uiTrailStopToPrevCandle), out bool trailPrevCandle))
+                        _uiTrailStopToPrevCandle = trailPrevCandle;
+
                     if (value.TryGetValue("Min Tp In Ticks", out double minTp))
                         _minTpInTicks = Math.Max(1, minTp);
 
@@ -953,6 +974,9 @@ namespace DivergentStrV0_1
                         _uiHmaLenComposite = Math.Max(2, Math.Min(200, hmaLenOld));
                         _uiHmaLenPure = Math.Max(2, Math.Min(200, hmaLenOld));
                     }
+
+                    if (value.TryGetValue(nameof(_uiUseCompositeHmaForDirection), out bool useCompositeForDir))
+                        _uiUseCompositeHmaForDirection = useCompositeForDir;
 
                     if (value.TryGetValue(nameof(_uiAtrNormalize), out bool atrNorm))
                         _uiAtrNormalize = atrNorm;

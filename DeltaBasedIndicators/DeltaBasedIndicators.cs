@@ -121,10 +121,8 @@ namespace DeltaBasedIndicators
 
 			else
 			{
-				if (_Use_Median)
-					this._PriceBuffer.Add(this.HistoricalData[1][PriceType.Median]);
-				else
-					this._PriceBuffer.Add(Math.Abs(this.HistoricalData[1][PriceType.Close] - this.HistoricalData[1][PriceType.Open]));
+				double priceMove = Math.Abs(this.HistoricalData[1][PriceType.Close] - this.HistoricalData[1][PriceType.Open]);
+				this._PriceBuffer.Add(priceMove);
 			}
 
 			// VD (delta) for current bar
@@ -158,22 +156,26 @@ namespace DeltaBasedIndicators
 			if (!this._PriceBuffer.IsFull || !this._DeltaBuffer.IsFull || !this._DeltaBuffer_Strenght.IsFull)
 				return;
 
-			var priceMedian = this._PriceBuffer.ToArray().Average();
-			var deltaMedian = this._DeltaBuffer.ToArray().Average();
-			var deltaMedian_strenght = this._DeltaBuffer_Strenght.ToArray().Average();
+			var priceSeries = this._PriceBuffer.ToArray();
+			var deltaSeries = this._DeltaBuffer.ToArray();
+			var deltaStrengthSeries = this._DeltaBuffer_Strenght.ToArray();
+
+			var priceCentral = this._Use_Median ? ComputeMedian(priceSeries) : priceSeries.Average();
+			var deltaCentral = this._Use_Median ? ComputeMedian(deltaSeries) : deltaSeries.Average();
+			var deltaStrengthCentral = this._Use_Median ? ComputeMedian(deltaStrengthSeries) : deltaStrengthSeries.Average();
 
 
 			double APAVD;
-			if (deltaMedian > 0)
-				APAVD = priceMedian / deltaMedian;
+			if (deltaCentral > 0)
+				APAVD = priceCentral / deltaCentral;
 			else
 				APAVD = double.PositiveInfinity; // force isOkey to false
 
-			var lastDeltaAbs = Math.Abs(this._DeltaBuffer.ToArray().Last());
-			double CPVD = lastDeltaAbs > 0 ? this._PriceBuffer.ToArray().Last() / lastDeltaAbs : 0.0;
+			var lastDeltaAbs = Math.Abs(deltaSeries.Last());
+			double CPVD = lastDeltaAbs > 0 ? priceSeries.Last() / lastDeltaAbs : 0.0;
 
 			bool isOkey = !double.IsInfinity(APAVD) && !double.IsNaN(APAVD) && CPVD > APAVD * this._Trh;
-			bool isOkeyStrenght = Math.Abs(delta) > deltaMedian_strenght*this._Trh_Strenght;
+			bool isOkeyStrenght = Math.Abs(delta) > deltaStrengthCentral*this._Trh_Strenght;
 
 			double value = !isOkey ? 0 : (delta > 0 ? 1 : -1);
 			double value_strenght = !isOkeyStrenght ? 0 : (delta > 0 ? 1 : -1);
@@ -182,7 +184,7 @@ namespace DeltaBasedIndicators
 			int priceSign = Math.Sign(this.HistoricalData[1][PriceType.Close] - this.HistoricalData[1][PriceType.Open]);
 			int vdSign = Math.Sign(delta);
 			double deltaAbs = Math.Abs(delta);
-			bool divergenceMagnitude = deltaMedian > 0 && deltaAbs > deltaMedian * this._Trh_Divergence;
+			bool divergenceMagnitude = deltaCentral > 0 && deltaAbs > deltaCentral * this._Trh_Divergence;
 			int delta_resoult = (divergenceMagnitude && priceSign != 0 && vdSign != 0 && vdSign != priceSign) ? (vdSign > 0 ? 1 : -1) : 0;
 
 			
@@ -233,6 +235,23 @@ namespace DeltaBasedIndicators
 				this._VolumeBuffer.Add(this.HistoricalData[i][PriceType.Volume]);
 		}
 
+		private static double ComputeMedian(double[] values)
+		{
+			if (values == null || values.Length == 0)
+				return double.NaN;
+
+			var filtered = values.Where(v => !double.IsNaN(v) && !double.IsInfinity(v)).ToArray();
+			if (filtered.Length == 0)
+				return double.NaN;
+
+			Array.Sort(filtered);
+			int mid = filtered.Length / 2;
+			if (filtered.Length % 2 == 0)
+				return (filtered[mid - 1] + filtered[mid]) / 2.0;
+
+			return filtered[mid];
+		}
+
 		private void FillPriceBuffer()
 		{
 			if (this.Count < this._LoockBackWindow)
@@ -240,10 +259,7 @@ namespace DeltaBasedIndicators
 
 			for (int i = this._LoockBackWindow;  i > 0; i--)
 			{
-				if (this._Use_Median)
-					this._PriceBuffer.Add(this.HistoricalData[i][PriceType.Median]);
-				else
-					this._PriceBuffer.Add(Math.Abs(this.HistoricalData[i][PriceType.Close] - this.HistoricalData[i][PriceType.Open]));
+				this._PriceBuffer.Add(Math.Abs(this.HistoricalData[i][PriceType.Close] - this.HistoricalData[i][PriceType.Open]));
 
 			}
 		}
