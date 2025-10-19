@@ -5,6 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Linq;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Text.Json;
 using TradingPlatform.BusinessLayer;
 
 namespace DivergentStrV0_1
@@ -20,6 +24,7 @@ namespace DivergentStrV0_1
         private const string KEY_SESS = "######## Sessions Settings ######";
         private const string KEY_SESS_COUNT = "######## Custom sessions count ######";
         private const string KEY_SESS_USEDEFAULT = "Use Default Sessions";
+        private const string KEY_SNAPSHOT = "######## Snapshot Settings ######";
         #endregion
 
         #region ====== UI Toggles ======
@@ -27,6 +32,7 @@ namespace DivergentStrV0_1
         private bool _uiShowStrat = true;
         private bool _uiShowAtr = false;
         private bool _uiShowDelta = false;
+        private bool _uiShowSnapshots = false;
         #endregion
 
         #region ====== ATR Settings (UI) ======
@@ -95,6 +101,28 @@ namespace DivergentStrV0_1
         private bool _exitUseVDP = true;
         private int _exitMinConditions = 1;
         #endregion
+
+        #region ====== Snapshot Settings ======
+        private string _uiSnapshotFileName = "snapshot";
+        private bool _uiSnapshotSaveRequest = false;
+        private bool _uiSnapshotOpenFolderRequest = false;
+        private string _uiSnapshotLoadFileName = string.Empty;
+        private bool _uiSnapshotLoadRequest = false;
+        #endregion
+
+        private static readonly string SnapshotExtension = ".json";
+        private static readonly string SnapshotDirectoryRoot =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                         "Quantower", "StrategySnapshots", "DivergentStrV0_1");
+
+        private static readonly HashSet<string> SnapshotTransientNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            KEY_SNAPSHOT,
+            nameof(_uiSnapshotSaveRequest),
+            nameof(_uiSnapshotOpenFolderRequest),
+            nameof(_uiSnapshotLoadFileName),
+            nameof(_uiSnapshotLoadRequest)
+        };
 
         #region ====== Lot System Parameters ======
         private bool _useLotSystem = false;
@@ -796,6 +824,49 @@ namespace DivergentStrV0_1
                 });
                 #endregion
 
+                #region ===== 600x Snapshot =====
+                settings.Add(new SettingItemBoolean(KEY_SNAPSHOT, _uiShowSnapshots)
+                {
+                    Text = KEY_SNAPSHOT,
+                    SortIndex = 6000
+                });
+
+                settings.Add(new SettingItemString(nameof(_uiSnapshotFileName), _uiSnapshotFileName)
+                {
+                    Text = "Snapshot: File name (without extension)",
+                    SortIndex = 6001,
+                    Relation = new SettingItemRelationVisibility(KEY_SNAPSHOT, true)
+                });
+
+                settings.Add(new SettingItemBoolean(nameof(_uiSnapshotSaveRequest), _uiSnapshotSaveRequest)
+                {
+                    Text = "Snapshot: Save current settings",
+                    SortIndex = 6002,
+                    Relation = new SettingItemRelationVisibility(KEY_SNAPSHOT, true)
+                });
+
+                settings.Add(new SettingItemBoolean(nameof(_uiSnapshotOpenFolderRequest), _uiSnapshotOpenFolderRequest)
+                {
+                    Text = "Snapshot: Open snapshots folder",
+                    SortIndex = 6003,
+                    Relation = new SettingItemRelationVisibility(KEY_SNAPSHOT, true)
+                });
+
+                settings.Add(new SettingItemString(nameof(_uiSnapshotLoadFileName), _uiSnapshotLoadFileName)
+                {
+                    Text = "Snapshot: File name to load",
+                    SortIndex = 6004,
+                    Relation = new SettingItemRelationVisibility(KEY_SNAPSHOT, true)
+                });
+
+                settings.Add(new SettingItemBoolean(nameof(_uiSnapshotLoadRequest), _uiSnapshotLoadRequest)
+                {
+                    Text = "Snapshot: Apply selected file",
+                    SortIndex = 6005,
+                    Relation = new SettingItemRelationVisibility(KEY_SNAPSHOT, true)
+                });
+                #endregion
+
                 return settings;
             }
 
@@ -1020,6 +1091,38 @@ namespace DivergentStrV0_1
 
                     if (value.TryGetValue(nameof(_uiVDtVLookback), out int vdtvLb))
                         _uiVDtVLookback = Math.Max(5, Math.Min(1000, vdtvLb));
+
+                    // ===== Snapshot =====
+                    if (value.TryGetValue(KEY_SNAPSHOT, out bool showSnapshots))
+                        _uiShowSnapshots = showSnapshots;
+
+                    if (value.TryGetValue(nameof(_uiSnapshotFileName), out string snapshotName))
+                    {
+                        var sanitized = SanitizeSnapshotName(snapshotName, allowEmpty: true);
+                        if (!string.IsNullOrWhiteSpace(sanitized))
+                            _uiSnapshotFileName = sanitized;
+                    }
+
+                    if (value.TryGetValue(nameof(_uiSnapshotSaveRequest), out bool saveRequest) && saveRequest)
+                    {
+                        SaveSettingsSnapshot(_uiSnapshotFileName);
+                        _uiSnapshotSaveRequest = false;
+                    }
+
+                    if (value.TryGetValue(nameof(_uiSnapshotOpenFolderRequest), out bool openFolder) && openFolder)
+                    {
+                        OpenSnapshotsFolder();
+                        _uiSnapshotOpenFolderRequest = false;
+                    }
+
+                    if (value.TryGetValue(nameof(_uiSnapshotLoadFileName), out string loadName))
+                        _uiSnapshotLoadFileName = SanitizeSnapshotName(loadName, allowEmpty: true);
+
+                    if (value.TryGetValue(nameof(_uiSnapshotLoadRequest), out bool loadRequest) && loadRequest)
+                    {
+                        LoadSettingsSnapshot(_uiSnapshotLoadFileName);
+                        _uiSnapshotLoadRequest = false;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -1036,6 +1139,252 @@ namespace DivergentStrV0_1
 
 
 
+
+        private static string EnsureSnapshotDirectory()
+        {
+            if (!Directory.Exists(SnapshotDirectoryRoot))
+                Directory.CreateDirectory(SnapshotDirectoryRoot);
+            return SnapshotDirectoryRoot;
+        }
+
+        private static string AppendSnapshotExtension(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return string.Empty;
+
+            return name.EndsWith(SnapshotExtension, StringComparison.OrdinalIgnoreCase)
+                ? name
+                : name + SnapshotExtension;
+        }
+
+        private static string SanitizeSnapshotName(string raw, bool allowEmpty = false)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return allowEmpty ? string.Empty : string.Empty;
+
+            var trimmed = raw.Trim();
+            var invalid = Path.GetInvalidFileNameChars();
+            var sanitizedChars = trimmed.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray();
+            var sanitized = new string(sanitizedChars);
+            return string.IsNullOrWhiteSpace(sanitized) && !allowEmpty
+                ? string.Empty
+                : sanitized;
+        }
+
+        private void SaveSettingsSnapshot(string requestedName)
+        {
+            try
+            {
+                string directory = EnsureSnapshotDirectory();
+                string sanitizedName = SanitizeSnapshotName(requestedName);
+                if (string.IsNullOrWhiteSpace(sanitizedName))
+                    sanitizedName = $"snapshot_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+
+                _uiSnapshotFileName = sanitizedName;
+
+                string filePath = Path.Combine(directory, AppendSnapshotExtension(sanitizedName));
+                var snapshot = CaptureCurrentSettingsSnapshot();
+
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                File.WriteAllText(filePath, JsonSerializer.Serialize(snapshot, options));
+
+                AppLog.System("DivergentStr", "SnapshotSave", $"Saved settings snapshot '{sanitizedName}' ({snapshot.Count} entries) to {filePath}");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("DivergentStr", "SnapshotSave", $"Failed to save snapshot '{requestedName}': {ex.Message}");
+            }
+        }
+
+        private void LoadSettingsSnapshot(string requestedName)
+        {
+            try
+            {
+                string directory = EnsureSnapshotDirectory();
+                string sanitizedName = SanitizeSnapshotName(requestedName);
+
+                if (string.IsNullOrWhiteSpace(sanitizedName))
+                {
+                    AppLog.Error("DivergentStr", "SnapshotLoad", "Snapshot file name is empty. Provide a valid name before loading.");
+                    return;
+                }
+
+                _uiSnapshotLoadFileName = sanitizedName;
+
+                string filePath = Path.Combine(directory, AppendSnapshotExtension(sanitizedName));
+                if (!File.Exists(filePath))
+                {
+                    AppLog.Error("DivergentStr", "SnapshotLoad", $"Snapshot '{sanitizedName}' not found in {directory}");
+                    return;
+                }
+
+                var json = File.ReadAllText(filePath);
+                var snapshot = JsonSerializer.Deserialize<List<SnapshotEntry>>(json) ?? new List<SnapshotEntry>();
+
+                var items = new List<SettingItem>();
+                foreach (var entry in snapshot)
+                {
+                    if (entry == null || SnapshotTransientNames.Contains(entry.Name ?? string.Empty))
+                        continue;
+
+                    var settingItem = CreateSettingItemFromEntry(entry);
+                    if (settingItem != null)
+                        items.Add(settingItem);
+                }
+
+                if (items.Count == 0)
+                {
+                    AppLog.Error("DivergentStr", "SnapshotLoad", $"Snapshot '{sanitizedName}' does not contain valid settings.");
+                    return;
+                }
+
+                this.Settings = items;
+                AppLog.System("DivergentStr", "SnapshotLoad", $"Applied settings snapshot '{sanitizedName}' ({items.Count} entries).");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("DivergentStr", "SnapshotLoad", $"Failed to load snapshot '{requestedName}': {ex.Message}");
+            }
+        }
+
+        private void OpenSnapshotsFolder()
+        {
+            try
+            {
+                string directory = EnsureSnapshotDirectory();
+                var psi = new ProcessStartInfo
+                {
+                    FileName = directory,
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+                AppLog.System("DivergentStr", "SnapshotFolder", $"Opened snapshots folder: {directory}");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("DivergentStr", "SnapshotFolder", $"Failed to open snapshots folder: {ex.Message}");
+            }
+        }
+
+        private List<SnapshotEntry> CaptureCurrentSettingsSnapshot()
+        {
+            var snapshot = new List<SnapshotEntry>();
+            foreach (var item in this.Settings)
+            {
+                if (item == null || string.IsNullOrWhiteSpace(item.Name))
+                    continue;
+
+                if (SnapshotTransientNames.Contains(item.Name))
+                    continue;
+
+                switch (item)
+                {
+                    case SettingItemBoolean boolItem:
+                        {
+                            bool boolValue = boolItem.Value is bool b
+                                ? b
+                                : Convert.ToBoolean(boolItem.Value, CultureInfo.InvariantCulture);
+                            snapshot.Add(SnapshotEntry.Create(item.Name, "Boolean", boolValue ? bool.TrueString : bool.FalseString));
+                        }
+                        break;
+                    case SettingItemInteger intItem:
+                        {
+                            int intValue = intItem.Value is int i
+                                ? i
+                                : Convert.ToInt32(intItem.Value, CultureInfo.InvariantCulture);
+                            snapshot.Add(SnapshotEntry.Create(item.Name, "Int32", intValue.ToString(CultureInfo.InvariantCulture)));
+                        }
+                        break;
+                    case SettingItemDouble doubleItem:
+                        {
+                            double doubleValue = doubleItem.Value is double d
+                                ? d
+                                : Convert.ToDouble(doubleItem.Value, CultureInfo.InvariantCulture);
+                            snapshot.Add(SnapshotEntry.Create(item.Name, "Double", doubleValue.ToString("G17", CultureInfo.InvariantCulture)));
+                        }
+                        break;
+                    case SettingItemDateTime dateItem:
+                        {
+                            DateTime dtValue = dateItem.Value is DateTime dt
+                                ? dt
+                                : Convert.ToDateTime(dateItem.Value, CultureInfo.InvariantCulture);
+                            snapshot.Add(SnapshotEntry.Create(item.Name, "DateTime", dtValue.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)));
+                        }
+                        break;
+                    case SettingItemString stringItem:
+                        snapshot.Add(SnapshotEntry.Create(item.Name, "String", stringItem.Value as string ?? string.Empty));
+                        break;
+                }
+            }
+            return snapshot;
+        }
+
+        private static SettingItem CreateSettingItemFromEntry(SnapshotEntry entry)
+        {
+            if (string.IsNullOrWhiteSpace(entry?.Name))
+                return null;
+
+            var type = entry.Type ?? string.Empty;
+            var value = entry.Value ?? string.Empty;
+
+            try
+            {
+                switch (type)
+                {
+                    case "Boolean":
+                        if (bool.TryParse(value, out var b))
+                            return new SettingItemBoolean(entry.Name, b);
+                        break;
+                    case "Int32":
+                    case "Int64":
+                        if (int.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var i))
+                            return new SettingItemInteger(entry.Name, i);
+                        break;
+                    case "Double":
+                    case "Single":
+                    case "Decimal":
+                        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var d))
+                            return new SettingItemDouble(entry.Name, d);
+                        break;
+                    case "DateTime":
+                        if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var dt))
+                            return new SettingItemDateTime(entry.Name, dt);
+                        break;
+                    case "String":
+                        return new SettingItemString(entry.Name, value);
+                    default:
+                        // Attempt best-effort parsing
+                        if (bool.TryParse(value, out var fallbackBool))
+                            return new SettingItemBoolean(entry.Name, fallbackBool);
+                        if (int.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var fallbackInt))
+                            return new SettingItemInteger(entry.Name, fallbackInt);
+                        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var fallbackDouble))
+                            return new SettingItemDouble(entry.Name, fallbackDouble);
+                        return new SettingItemString(entry.Name, value);
+                }
+            }
+            catch
+            {
+                // ignored - will fall through and return null
+            }
+
+            return null;
+        }
+
+        private sealed class SnapshotEntry
+        {
+            public string Name { get; set; }
+            public string Type { get; set; }
+            public string Value { get; set; }
+
+            public static SnapshotEntry Create(string name, string type, string value) =>
+                new SnapshotEntry
+                {
+                    Name = name,
+                    Type = type,
+                    Value = value
+                };
+        }
 
         protected override void OnInitializeMetrics(Meter meter)
         {
