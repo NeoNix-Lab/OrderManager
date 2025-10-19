@@ -1097,32 +1097,19 @@ namespace DivergentStrV0_1
                         _uiShowSnapshots = showSnapshots;
 
                     if (value.TryGetValue(nameof(_uiSnapshotFileName), out string snapshotName))
-                    {
-                        var sanitized = SanitizeSnapshotName(snapshotName, allowEmpty: true);
-                        if (!string.IsNullOrWhiteSpace(sanitized))
-                            _uiSnapshotFileName = sanitized;
-                    }
+                        _uiSnapshotFileName = SanitizeSnapshotName(snapshotName, allowEmpty: true);
 
-                    if (value.TryGetValue(nameof(_uiSnapshotSaveRequest), out bool saveRequest) && saveRequest)
-                    {
-                        SaveSettingsSnapshot(_uiSnapshotFileName);
-                        _uiSnapshotSaveRequest = false;
-                    }
+                    if (value.TryGetValue(nameof(_uiSnapshotSaveRequest), out bool saveRequest))
+                        _uiSnapshotSaveRequest = saveRequest;
 
-                    if (value.TryGetValue(nameof(_uiSnapshotOpenFolderRequest), out bool openFolder) && openFolder)
-                    {
-                        OpenSnapshotsFolder();
-                        _uiSnapshotOpenFolderRequest = false;
-                    }
+                    if (value.TryGetValue(nameof(_uiSnapshotOpenFolderRequest), out bool openFolder))
+                        _uiSnapshotOpenFolderRequest = openFolder;
 
                     if (value.TryGetValue(nameof(_uiSnapshotLoadFileName), out string loadName))
                         _uiSnapshotLoadFileName = SanitizeSnapshotName(loadName, allowEmpty: true);
 
-                    if (value.TryGetValue(nameof(_uiSnapshotLoadRequest), out bool loadRequest) && loadRequest)
-                    {
-                        LoadSettingsSnapshot(_uiSnapshotLoadFileName);
-                        _uiSnapshotLoadRequest = false;
-                    }
+                    if (value.TryGetValue(nameof(_uiSnapshotLoadRequest), out bool loadRequest))
+                        _uiSnapshotLoadRequest = loadRequest;
                 }
                 catch (Exception ex)
                 {
@@ -1169,6 +1156,114 @@ namespace DivergentStrV0_1
             return string.IsNullOrWhiteSpace(sanitized) && !allowEmpty
                 ? string.Empty
                 : sanitized;
+        }
+
+        private void UpdateSettingItemValue(string name, object value)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return;
+
+            var item = base.Settings?.FirstOrDefault(s => string.Equals(s?.Name, name, StringComparison.Ordinal));
+            if (item == null)
+                return;
+
+            switch (item)
+            {
+                case SettingItemBoolean boolItem when value is bool boolVal:
+                    {
+                        bool current = boolItem.Value is bool boolCurrent
+                            ? boolCurrent
+                            : (boolItem.Value == null ? false : Convert.ToBoolean(boolItem.Value, CultureInfo.InvariantCulture));
+                        if (current != boolVal)
+                            boolItem.Value = boolVal;
+                    }
+                    break;
+                case SettingItemInteger intItem when value is int intVal:
+                    {
+                        int current = intItem.Value is int intCurrent
+                            ? intCurrent
+                            : Convert.ToInt32(intItem.Value ?? 0, CultureInfo.InvariantCulture);
+                        if (current != intVal)
+                            intItem.Value = intVal;
+                    }
+                    break;
+                case SettingItemDouble doubleItem when value is double doubleVal:
+                    {
+                        double current = doubleItem.Value is double doubleCurrent
+                            ? doubleCurrent
+                            : Convert.ToDouble(doubleItem.Value ?? 0.0, CultureInfo.InvariantCulture);
+                        if (!current.Equals(doubleVal))
+                            doubleItem.Value = doubleVal;
+                    }
+                    break;
+                case SettingItemDateTime dateItem when value is DateTime dateVal:
+                    {
+                        DateTime current = dateItem.Value is DateTime dateCurrent
+                            ? dateCurrent
+                            : Convert.ToDateTime(dateItem.Value ?? DateTime.MinValue, CultureInfo.InvariantCulture);
+                        if (current != dateVal)
+                            dateItem.Value = dateVal;
+                    }
+                    break;
+                case SettingItemString stringItem when value is string strVal:
+                    {
+                        var current = stringItem.Value as string ?? string.Empty;
+                        if (!string.Equals(current, strVal, StringComparison.Ordinal))
+                            stringItem.Value = strVal;
+                    }
+                    break;
+            }
+        }
+
+        protected override void OnSettingsUpdated()
+        {
+            base.OnSettingsUpdated();
+
+            try
+            {
+                var sanitizedSaveName = SanitizeSnapshotName(_uiSnapshotFileName, allowEmpty: true);
+                if (!string.Equals(_uiSnapshotFileName, sanitizedSaveName, StringComparison.Ordinal))
+                {
+                    _uiSnapshotFileName = sanitizedSaveName;
+                    UpdateSettingItemValue(nameof(_uiSnapshotFileName), _uiSnapshotFileName);
+                }
+
+                var sanitizedLoadName = SanitizeSnapshotName(_uiSnapshotLoadFileName, allowEmpty: true);
+                if (!string.Equals(_uiSnapshotLoadFileName, sanitizedLoadName, StringComparison.Ordinal))
+                {
+                    _uiSnapshotLoadFileName = sanitizedLoadName;
+                    UpdateSettingItemValue(nameof(_uiSnapshotLoadFileName), _uiSnapshotLoadFileName);
+                }
+
+                if (_uiSnapshotSaveRequest)
+                {
+                    _uiSnapshotSaveRequest = false;
+                    UpdateSettingItemValue(nameof(_uiSnapshotSaveRequest), false);
+                    SaveSettingsSnapshot(_uiSnapshotFileName);
+                }
+
+                if (_uiSnapshotOpenFolderRequest)
+                {
+                    _uiSnapshotOpenFolderRequest = false;
+                    UpdateSettingItemValue(nameof(_uiSnapshotOpenFolderRequest), false);
+                    OpenSnapshotsFolder();
+                }
+
+                if (_uiSnapshotLoadRequest)
+                {
+                    _uiSnapshotLoadRequest = false;
+                    UpdateSettingItemValue(nameof(_uiSnapshotLoadRequest), false);
+
+                    if (!string.IsNullOrWhiteSpace(_uiSnapshotLoadFileName))
+                        LoadSettingsSnapshot(_uiSnapshotLoadFileName);
+                    else
+                        AppLog.Error("DivergentStr", "SnapshotLoad", "Snapshot file name is empty. Provide a valid name before loading.");
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("DivergentStr", "SettingsUpdated", $"Error while processing snapshot actions: {ex.Message}");
+            }
         }
 
         private void SaveSettingsSnapshot(string requestedName)
